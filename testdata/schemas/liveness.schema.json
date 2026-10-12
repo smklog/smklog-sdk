@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smklog.com/developers/schemas/liveness.schema.json",
+  "title": "Liveness",
+  "type": "object",
+  "description": "The liveness answer: the service is up and which version is serving.",
+  "required": [
+    "ok",
+    "service",
+    "version",
+    "time"
+  ],
+  "properties": {
+    "ok": {
+      "type": "boolean",
+      "enum": [
+        true
+      ]
+    },
+    "service": {
+      "type": "string",
+      "enum": [
+        "smklog-quote-api"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "description": "Product version shared by the OpenAPI, the MCP server and the agent card"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Server time, ISO 8601"
+    },
+    "last_estimate_race": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Diagnostic: the latest estimator race outcome, null when none is recorded",
+      "additionalProperties": true
+    }
+  },
+  "x-provenance": {
+    "method": "published",
+    "publisher": "SMKlog (SMKLOG-2022 LLC)",
+    "source": "https://quote-api.smklog.com/openapi.json",
+    "published": "2026-10-12"
+  }
+}

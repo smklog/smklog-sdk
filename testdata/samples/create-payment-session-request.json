@@ -1,0 +1,26 @@
+{
+  "operationId": "createPaymentSession",
+  "method": "POST",
+  "path": "/agent/checkout-session",
+  "examples": [
+    {
+      "name": "fromQuote",
+      "summary": "Reuse a quote_id (no second carrier call)",
+      "value": {
+        "quote_id": "q_8f3c2e1a4b7d",
+        "service": "USPS Ground Advantage"
+      }
+    },
+    {
+      "name": "fromShipment",
+      "summary": "Price live and open checkout in one call",
+      "value": {
+        "product": "Yamaha FG800 acoustic guitar in a hard case",
+        "from_zip": "07102",
+        "to_zip": "30303",
+        "to_country": "US",
+        "quantity": 1
+      }
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smklog-sdk"
+version = "0.1.0"
+description = "Official Python client and command line for the SMKlog Quote API: live USPS, UPS, FedEx and DHL parcel rates from a US origin, a checkout handed to a human, and where it stands."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.9"
+authors = [{ name = "SMKlog", email = "info@smklog.com" }]
+keywords = ["smklog", "shipping", "parcel", "rates", "usps", "ups", "fedex", "dhl", "labels"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Internet :: WWW/HTTP",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://smklog.com/developers/"
+Documentation = "https://smklog.com/developers/"
+Repository = "https://github.com/smklog/smklog-sdk"
+Changelog = "https://github.com/smklog/smklog-sdk/releases"
+"OpenAPI" = "https://quote-api.smklog.com/openapi.json"
+"Status page" = "https://smklog.com/developers/status"
+
+[project.scripts]
+smklog = "smklog.cli:main"
+
+[tool.setuptools.package-data]
+smklog = ["py.typed"]

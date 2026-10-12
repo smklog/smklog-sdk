@@ -1,0 +1,19 @@
+{
+  "operationId": "status",
+  "method": "GET",
+  "path": "/status",
+  "responses": {
+    "200": [
+      {
+        "name": "default",
+        "value": {
+          "ok": true,
+          "service": "smklog-quote-api",
+          "version": "1.4.0",
+          "time": "2026-10-12T15:04:05.000Z",
+          "last_estimate_race": null
+        }
+      }
+    ]
+  }
+}

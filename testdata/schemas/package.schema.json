@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smklog.com/developers/schemas/package.schema.json",
+  "title": "Package",
+  "type": "object",
+  "description": "The packed box used for pricing: what the estimator (or the caller) said the parcel measures, with the confidence and the assumptions behind an estimate.",
+  "properties": {
+    "quantity": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Units packed into this box"
+    },
+    "length_cm": {
+      "type": "number",
+      "description": "Packed length, cm"
+    },
+    "width_cm": {
+      "type": "number",
+      "description": "Packed width, cm"
+    },
+    "height_cm": {
+      "type": "number",
+      "description": "Packed height, cm"
+    },
+    "weight_kg": {
+      "type": "number",
+      "description": "Packed weight, kg"
+    },
+    "description": {
+      "type": "string",
+      "description": "What the box holds, in a few words"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "manual"
+      ],
+      "description": "How sure the estimate is; manual when the caller supplied the measurements"
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "What the estimate took for granted, for the human to correct before paying"
+    }
+  },
+  "x-provenance": {
+    "method": "published",
+    "publisher": "SMKlog (SMKLOG-2022 LLC)",
+    "source": "https://quote-api.smklog.com/openapi.json",
+    "published": "2026-10-12"
+  }
+}

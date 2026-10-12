@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smklog.com/developers/schemas/quote-request.schema.json",
+  "title": "QuoteRequest",
+  "type": "object",
+  "description": "One shipment to price. Name the item in plain words (the packed box is estimated) or send the four packed measurements and skip the estimate.",
+  "required": [
+    "quantity",
+    "from_postal_code",
+    "to_postal_code"
+  ],
+  "properties": {
+    "product": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Plain-words item description, e.g. \"Yamaha FG800 acoustic guitar in a hard case\". Required unless product_url is given. Drives the box and weight estimate when dimensions are omitted. Text that names no shippable item answers 400 product_not_recognized."
+    },
+    "product_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Store product page URL; the item is identified from the page. Alternative to product."
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "How many of the item ship together. Default 1. Units the estimate packs into one box are priced as that box; units that need more than one box, or a quantity above 1 sent with exact dimensions (those describe one box), return mode multiple_boxes with empty rates."
+    },
+    "from_postal_code": {
+      "type": "string",
+      "pattern": "^[0-9]{5}$",
+      "description": "5-digit US ZIP; the origin is always in the United States."
+    },
+    "to_postal_code": {
+      "type": "string",
+      "maxLength": 12,
+      "description": "5-digit US ZIP when to_country_code is US or omitted; otherwise the destination country's own postal code."
+    },
+    "to_country_code": {
+      "type": "string",
+      "enum": [
+        "US",
+        "CA",
+        "GB",
+        "DE",
+        "AU"
+      ],
+      "default": "US",
+      "description": "Destination country. Sold online: US, CA, GB, DE, AU; any other answers mode international_unsupported_online with no rates."
+    },
+    "length_cm": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 300,
+      "description": "Packed box length. Supply all four of length_cm, width_cm, height_cm, weight_kg to skip the estimate."
+    },
+    "width_cm": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 300,
+      "description": "Packed box width, cm."
+    },
+    "height_cm": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 300,
+      "description": "Packed box height, cm."
+    },
+    "weight_kg": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 1000,
+      "description": "Packed weight, kg. Online pricing stops at 68 kg (150 lb), 274 cm (108 in) on the longest side and 419 cm (165 in) of length plus girth; beyond that the response is mode not_a_parcel."
+    },
+    "package_source": {
+      "type": "string",
+      "enum": [
+        "manual"
+      ],
+      "description": "Set to \"manual\" when supplying exact dimensions."
+    }
+  },
+  "x-provenance": {
+    "method": "published",
+    "publisher": "SMKlog (SMKLOG-2022 LLC)",
+    "source": "https://quote-api.smklog.com/openapi.json",
+    "published": "2026-10-12"
+  }
+}

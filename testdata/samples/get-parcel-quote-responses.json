@@ -1,0 +1,115 @@
+{
+  "operationId": "getParcelQuote",
+  "method": "POST",
+  "path": "/quote",
+  "responses": {
+    "200": [
+      {
+        "name": "priced",
+        "summary": "Priced parcel, two of up to five rates shown",
+        "value": {
+          "mode": "parcel_label_ready",
+          "identified_product_title": "Yamaha FG800 acoustic guitar in a hard case",
+          "package": {
+            "quantity": 1,
+            "length_cm": 112,
+            "width_cm": 48,
+            "height_cm": 20,
+            "weight_kg": 6.4,
+            "description": "Hard case in a single carton with padding",
+            "confidence": "medium",
+            "assumptions": [
+              "Hard case packed in one carton with about 5 cm of padding on every side"
+            ]
+          },
+          "rates": [
+            {
+              "carrier": "USPS",
+              "service": "Ground Advantage",
+              "service_code": "GroundAdvantage",
+              "amount": 38.42,
+              "retail_amount": 46.95,
+              "delivery_days": 4,
+              "delivery_window": "2-5 business days",
+              "delivery_estimated_date": null,
+              "currency": "USD"
+            },
+            {
+              "carrier": "UPS",
+              "service": "Ground",
+              "service_code": "Ground",
+              "amount": 41.1,
+              "retail_amount": 67.35,
+              "delivery_days": 3,
+              "delivery_window": null,
+              "delivery_estimated_date": "2026-10-16",
+              "currency": "USD"
+            }
+          ],
+          "dangerous_goods": null,
+          "source": {
+            "package": "ai_estimate",
+            "rates": "live_carrier"
+          }
+        }
+      },
+      {
+        "name": "notAParcel",
+        "summary": "Past parcel limits: no rates, no offer",
+        "value": {
+          "mode": "not_a_parcel",
+          "identified_product_title": "Honda CB500F motorcycle",
+          "package": {
+            "quantity": 1,
+            "length_cm": 210,
+            "width_cm": 80,
+            "height_cm": 110,
+            "weight_kg": 190,
+            "description": "Crated motorcycle",
+            "confidence": "medium",
+            "assumptions": []
+          },
+          "rates": [],
+          "notice": "This shipment is past parcel limits. SMKlog sells parcel labels only and does not arrange pallet or freight shipments.",
+          "dangerous_goods": null,
+          "source": {
+            "package": "ai_estimate",
+            "rates": "not_a_parcel"
+          }
+        }
+      }
+    ],
+    "400": [
+      {
+        "name": "default",
+        "value": {
+          "error": "missing_required_fields",
+          "missing": [
+            "to_postal_code"
+          ]
+        }
+      }
+    ],
+    "422": [
+      {
+        "name": "default",
+        "value": {
+          "error": "product_url_not_detected",
+          "message": "Could not identify the product from this URL. Enter the product name or package dimensions manually.",
+          "missing": [
+            "product"
+          ]
+        }
+      }
+    ],
+    "429": [
+      {
+        "name": "default",
+        "value": {
+          "error": "rate_limited",
+          "message": "Too many Smart Quote API requests from this client. Try again later."
+        }
+      }
+    ]
+  }
+}
