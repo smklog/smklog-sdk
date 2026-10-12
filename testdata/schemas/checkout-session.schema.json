@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smklog.com/developers/schemas/checkout-session.schema.json",
+  "title": "CheckoutSession",
+  "type": "object",
+  "description": "A payment session, not a charge: the amount and the handoff URL where the human pays. The amount is a live quote at this moment, not a hold or a reservation, and no money moves until the human completes the page.",
+  "required": [
+    "intent",
+    "amount",
+    "currency",
+    "handoff_url"
+  ],
+  "properties": {
+    "intent": {
+      "type": "string",
+      "enum": [
+        "session"
+      ],
+      "description": "Always \"session\" — this operation never charges"
+    },
+    "session_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^as_[A-Za-z0-9-]{8,80}$",
+      "description": "Handle for getCheckoutStatus, shaped as_ plus a UUID, good for 30 days. Null only when the session record could not be stored."
+    },
+    "method": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Payment rails behind the checkout, e.g. stripe, card"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Live-quoted checkout total for the anchored service, USD"
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "USD"
+      ],
+      "description": "ISO currency, USD"
+    },
+    "service": {
+      "type": "string",
+      "description": "The service the amount is anchored to"
+    },
+    "handoff_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Opens the SMKlog checkout prefilled with this shipment"
+    },
+    "identified_product_title": {
+      "type": "string",
+      "description": "What the estimator understood the item to be"
+    },
+    "quote_reused": {
+      "type": "boolean",
+      "description": "True when the amount came from a quote_id you supplied, so no carrier call was spent"
+    },
+    "note": {
+      "type": "string",
+      "description": "Standing caveats: live quote, human confirms consents and pays"
+    }
+  },
+  "x-provenance": {
+    "method": "published",
+    "publisher": "SMKlog (SMKLOG-2022 LLC)",
+    "source": "https://quote-api.smklog.com/openapi.json",
+    "published": "2026-10-12"
+  }
+}

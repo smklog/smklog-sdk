@@ -1,0 +1,51 @@
+{
+  "name": "smklog",
+  "version": "0.1.0",
+  "description": "Official JavaScript client for the SMKlog Quote API: live USPS, UPS, FedEx and DHL parcel rates from a US origin, a checkout handed to a human, and where that checkout stands. No API key.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smklog/smklog-sdk.git",
+    "directory": "javascript"
+  },
+  "homepage": "https://smklog.com/developers/",
+  "bugs": {
+    "email": "info@smklog.com"
+  },
+  "keywords": [
+    "smklog",
+    "shipping",
+    "shipping-rates",
+    "parcel",
+    "postage",
+    "label",
+    "usps",
+    "ups",
+    "fedex",
+    "dhl",
+    "quote",
+    "checkout",
+    "api-client",
+    "sdk"
+  ]
+}

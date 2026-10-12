@@ -1,0 +1,32 @@
+{
+  "operationId": "getParcelQuote",
+  "method": "POST",
+  "path": "/quote",
+  "examples": [
+    {
+      "name": "described",
+      "summary": "Item described in plain words; the box is estimated",
+      "value": {
+        "product": "Yamaha FG800 acoustic guitar in a hard case",
+        "quantity": 1,
+        "from_postal_code": "07102",
+        "to_postal_code": "30303"
+      }
+    },
+    {
+      "name": "measured",
+      "summary": "Exact packed box; no estimate",
+      "value": {
+        "product": "paperback books",
+        "quantity": 1,
+        "from_postal_code": "07030",
+        "to_postal_code": "33101",
+        "length_cm": 30,
+        "width_cm": 22,
+        "height_cm": 12,
+        "weight_kg": 3.2,
+        "package_source": "manual"
+      }
+    }
+  ]
+}

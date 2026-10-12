@@ -1,0 +1,54 @@
+{
+  "operationId": "createPaymentSession",
+  "method": "POST",
+  "path": "/agent/checkout-session",
+  "responses": {
+    "200": [
+      {
+        "name": "default",
+        "value": {
+          "intent": "session",
+          "session_id": "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33",
+          "method": [
+            "stripe",
+            "card"
+          ],
+          "amount": 38.42,
+          "currency": "USD",
+          "service": "USPS Ground Advantage",
+          "handoff_url": "https://smklog.com/assets/calculator?product=Yamaha+FG800+acoustic+guitar+in+a+hard+case&from_postal_code=07102&to_postal_code=30303&agent_session=as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33",
+          "identified_product_title": "Yamaha FG800 acoustic guitar in a hard case",
+          "quote_reused": true,
+          "note": "Live quote at this moment, not a hold. The human confirms the shipping consents and pays on the checkout page. Keep session_id: get_checkout_status reports when the human has paid and when the label exists."
+        }
+      }
+    ],
+    "400": [
+      {
+        "name": "default",
+        "value": {
+          "error": "invalid_request",
+          "message": "JSON object body required."
+        }
+      }
+    ],
+    "422": [
+      {
+        "name": "default",
+        "value": {
+          "error": "session_failed",
+          "message": "This shipment is past parcel limits; SMKlog sells parcel labels only."
+        }
+      }
+    ],
+    "429": [
+      {
+        "name": "default",
+        "value": {
+          "error": "rate_limited",
+          "message": "Too many Smart Quote API requests from this client. Try again later."
+        }
+      }
+    ]
+  }
+}

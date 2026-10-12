@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smklog.com/developers/schemas/rate.schema.json",
+  "title": "Rate",
+  "type": "object",
+  "description": "One purchasable service. Two prices are returned and they are not interchangeable: amount is the checkout total a customer pays, with the SMKlog fee inside it (the fee is itemized only on the checkout receipt), and retail_amount is the carrier’s own counter price for the same parcel where the carrier publishes one (0 where it does not).",
+  "required": [
+    "carrier",
+    "service",
+    "amount",
+    "currency"
+  ],
+  "properties": {
+    "carrier": {
+      "type": "string",
+      "enum": [
+        "USPS",
+        "UPS",
+        "FedEx",
+        "DHL"
+      ],
+      "description": "USPS, UPS, FedEx or DHL"
+    },
+    "service": {
+      "type": "string",
+      "description": "Service display name, e.g. Ground Advantage"
+    },
+    "service_code": {
+      "type": "string",
+      "description": "Carrier service code, stable across calls"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Checkout total, USD, SMKlog fee inside"
+    },
+    "retail_amount": {
+      "type": "number",
+      "description": "Carrier retail counter price, USD; 0 when not published"
+    },
+    "delivery_days": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "description": "Transit days the carrier quoted, null when it quoted none"
+    },
+    "delivery_window": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "e.g. \"2-5 business days\"; null when the carrier quoted none"
+    },
+    "delivery_estimated_date": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "ISO date the carrier estimates, null when it gives none"
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "USD"
+      ],
+      "description": "Always USD"
+    }
+  },
+  "x-provenance": {
+    "method": "published",
+    "publisher": "SMKlog (SMKLOG-2022 LLC)",
+    "source": "https://quote-api.smklog.com/openapi.json",
+    "published": "2026-10-12"
+  }
+}

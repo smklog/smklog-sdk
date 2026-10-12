@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smklog.com/developers/schemas/quote-response.schema.json",
+  "title": "QuoteResponse",
+  "type": "object",
+  "description": "A priced parcel, or a parcel the service will not price with the reason spelled out in mode. Only mode parcel_label_ready carries rates.",
+  "required": [
+    "mode",
+    "rates"
+  ],
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "parcel_label_ready",
+        "not_a_parcel",
+        "multiple_boxes",
+        "international_unsupported_online",
+        "parcel_restricted",
+        "review",
+        "parcel_rates_unavailable"
+      ],
+      "description": "parcel_label_ready with up to 5 rates; not_a_parcel (empty rates: SMKlog does not arrange pallet or freight shipments); multiple_boxes (empty rates: quote each box on its own); international_unsupported_online; parcel_restricted and review (empty rates with an explanation); parcel_rates_unavailable (no carrier answered)."
+    },
+    "identified_product_title": {
+      "type": "string",
+      "description": "What the estimator understood the item to be"
+    },
+    "package": {
+      "$ref": "https://smklog.com/developers/schemas/package.schema.json"
+    },
+    "packages": {
+      "type": "array",
+      "items": {
+        "$ref": "https://smklog.com/developers/schemas/package.schema.json"
+      },
+      "description": "Every box the estimate produced; one entry when the shipment is one parcel"
+    },
+    "rates": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+        "$ref": "https://smklog.com/developers/schemas/rate.schema.json"
+      },
+      "description": "Up to five purchasable services, best value first"
+    },
+    "dangerous_goods": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Present when the item matched a dangerous-goods rule: the rule, the carrier restriction and what the human must confirm at checkout",
+      "additionalProperties": true
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "format": "uri"
+          }
+        }
+      },
+      "description": "Product pages the estimate read, when a search informed it"
+    },
+    "notice": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Human-readable reason when mode is not parcel_label_ready"
+    },
+    "source": {
+      "type": "object",
+      "description": "Where the package estimate and the rates came from",
+      "properties": {
+        "package": {
+          "type": "string",
+          "description": "manual, catalog, or the estimator that produced the box"
+        },
+        "rates": {
+          "type": "string",
+          "description": "live_carrier for live carrier rating, not_a_parcel when nothing was priced"
+        }
+      },
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
+  "x-provenance": {
+    "method": "published",
+    "publisher": "SMKlog (SMKLOG-2022 LLC)",
+    "source": "https://quote-api.smklog.com/openapi.json",
+    "published": "2026-10-12"
+  }
+}

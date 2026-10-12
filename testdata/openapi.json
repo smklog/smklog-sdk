@@ -1,0 +1,1092 @@
+{
+ "openapi": "3.1.0",
+ "info": {
+  "title": "SMKlog Quote API",
+  "version": "1.4.0",
+  "summary": "Live parcel rates from a US origin, a checkout handed to a human, and where that checkout stands.",
+  "description": "Live parcel rates from USPS, UPS, FedEx and DHL Express for a single shipment sent from a US origin: inside the US, or to Canada, the UK, Germany or Australia. Describe the item in plain words and the packed box size and weight are estimated server-side; supply exact dimensions and weight to skip the estimate. No account and no key. Rate limited per client (about 80 quote requests per hour); quotes cost real money to produce, so cache on your side and do not poll. Buying a label happens on smklog.com — this API prices, it does not sell.",
+  "termsOfService": "https://smklog.com/terms",
+  "contact": {
+   "name": "SMKlog",
+   "email": "info@smklog.com",
+   "url": "https://smklog.com/developers/"
+  },
+  "x-publisher": "SMKlog (SMKLOG-2022 LLC)"
+ },
+ "externalDocs": {
+  "description": "Developer portal: docs, schemas, playground, rate limits, status",
+  "url": "https://smklog.com/developers/"
+ },
+ "x-provenance": {
+  "method": "published",
+  "publisher": "SMKlog (SMKLOG-2022 LLC)",
+  "source": "https://quote-api.smklog.com/openapi.json",
+  "published": "2026-10-12"
+ },
+ "servers": [
+  {
+   "url": "https://quote-api.smklog.com",
+   "description": "Production. There is no sandbox host: quoting is free and read-only, so production is the place to try it."
+  }
+ ],
+ "tags": [
+  {
+   "name": "quotes",
+   "description": "Live parcel rate quotes from a US origin."
+  },
+  {
+   "name": "checkout",
+   "description": "Agent-prepared payment sessions completed by a human on smklog.com."
+  },
+  {
+   "name": "operations",
+   "description": "Liveness."
+  }
+ ],
+ "security": [
+  {},
+  {
+   "clientCredentials": [
+    "quote"
+   ]
+  }
+ ],
+ "paths": {
+  "/quote": {
+   "post": {
+    "operationId": "getParcelQuote",
+    "tags": [
+     "quotes"
+    ],
+    "summary": "Price one parcel from a US origin across USPS, UPS and FedEx (plus DHL Express to Germany and Australia)",
+    "description": "Prices one shipment live against the carriers for the lane. Name the item in plain words and the packed box is estimated server-side (the estimate, its confidence and its assumptions come back in package); send length_cm, width_cm, height_cm, weight_kg and package_source \"manual\" to price an exact box instead. Up to five purchasable services come back, each a checkout total with the SMKlog fee inside and the carrier counter price beside it. One call per shipment: every call spends a live carrier rating.",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/QuoteRequest"
+       },
+       "examples": {
+        "described": {
+         "summary": "Item described in plain words; the box is estimated",
+         "value": {
+          "product": "Yamaha FG800 acoustic guitar in a hard case",
+          "quantity": 1,
+          "from_postal_code": "07102",
+          "to_postal_code": "30303"
+         }
+        },
+        "measured": {
+         "summary": "Exact packed box; no estimate",
+         "value": {
+          "product": "paperback books",
+          "quantity": 1,
+          "from_postal_code": "07030",
+          "to_postal_code": "33101",
+          "length_cm": 30,
+          "width_cm": 22,
+          "height_cm": 12,
+          "weight_kg": 3.2,
+          "package_source": "manual"
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Priced (mode parcel_label_ready, up to 5 rates), not a parcel (mode not_a_parcel, empty rates — SMKlog does not arrange pallet or freight shipments), more than one box (mode multiple_boxes, empty rates — quote each box on its own), or restricted (empty rates with an explanation).",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/QuoteResponse"
+        },
+        "examples": {
+         "priced": {
+          "summary": "Priced parcel, two of up to five rates shown",
+          "value": {
+           "mode": "parcel_label_ready",
+           "identified_product_title": "Yamaha FG800 acoustic guitar in a hard case",
+           "package": {
+            "quantity": 1,
+            "length_cm": 112,
+            "width_cm": 48,
+            "height_cm": 20,
+            "weight_kg": 6.4,
+            "description": "Hard case in a single carton with padding",
+            "confidence": "medium",
+            "assumptions": [
+             "Hard case packed in one carton with about 5 cm of padding on every side"
+            ]
+           },
+           "rates": [
+            {
+             "carrier": "USPS",
+             "service": "Ground Advantage",
+             "service_code": "GroundAdvantage",
+             "amount": 38.42,
+             "retail_amount": 46.95,
+             "delivery_days": 4,
+             "delivery_window": "2-5 business days",
+             "delivery_estimated_date": null,
+             "currency": "USD"
+            },
+            {
+             "carrier": "UPS",
+             "service": "Ground",
+             "service_code": "Ground",
+             "amount": 41.1,
+             "retail_amount": 67.35,
+             "delivery_days": 3,
+             "delivery_window": null,
+             "delivery_estimated_date": "2026-10-16",
+             "currency": "USD"
+            }
+           ],
+           "dangerous_goods": null,
+           "source": {
+            "package": "ai_estimate",
+            "rates": "live_carrier"
+           }
+          }
+         },
+         "notAParcel": {
+          "summary": "Past parcel limits: no rates, no offer",
+          "value": {
+           "mode": "not_a_parcel",
+           "identified_product_title": "Honda CB500F motorcycle",
+           "package": {
+            "quantity": 1,
+            "length_cm": 210,
+            "width_cm": 80,
+            "height_cm": 110,
+            "weight_kg": 190,
+            "description": "Crated motorcycle",
+            "confidence": "medium",
+            "assumptions": []
+           },
+           "rates": [],
+           "notice": "This shipment is past parcel limits. SMKlog sells parcel labels only and does not arrange pallet or freight shipments.",
+           "dangerous_goods": null,
+           "source": {
+            "package": "ai_estimate",
+            "rates": "not_a_parcel"
+           }
+          }
+         }
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "invalid_json, invalid_request, missing_required_fields (with a missing array), product_not_recognized (the text names no shippable item — name the thing itself), or postal validation failure.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        },
+        "example": {
+         "error": "missing_required_fields",
+         "missing": [
+          "to_postal_code"
+         ]
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "product_url_not_detected — the page did not identify an item.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        },
+        "example": {
+         "error": "product_url_not_detected",
+         "message": "Could not identify the product from this URL. Enter the product name or package dimensions manually.",
+         "missing": [
+          "product"
+         ]
+        }
+       }
+      }
+     },
+     "429": {
+      "description": "rate_limited. Slow down; the same buckets cover /quote and /mcp (about 80 quote requests an hour per client).",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        },
+        "example": {
+         "error": "rate_limited",
+         "message": "Too many Smart Quote API requests from this client. Try again later."
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/agent/checkout-session": {
+   "post": {
+    "operationId": "createPaymentSession",
+    "tags": [
+     "checkout"
+    ],
+    "summary": "Create a payment session for one parcel label (MPP intent \"session\")",
+    "description": "Prices the shipment live, anchors the amount to one service, and returns a handoff URL opening the SMKlog checkout prefilled with the shipment. The human confirms the contents certification and the carrier-adjustment consent there and pays on Stripe hosted checkout. This operation never charges: the agent prepares, the human pays. Pass the quote_id from getParcelQuote and the session reuses that quote instead of spending a second carrier call.",
+    "x-payment-info": {
+     "intent": "session",
+     "method": "stripe",
+     "amount": "0",
+     "currency": "USD",
+     "description": "Creating the session is free. The label amount is set by the live quote in the response and paid by the human on Stripe hosted checkout behind the site consent gates; no autonomous charge is possible through this API.",
+     "offers": [
+      {
+       "intent": "session",
+       "method": "stripe",
+       "amount": null,
+       "currency": "USD",
+       "description": "Amount is set by the live quote returned in the response; null per the draft means dynamic pricing."
+      }
+     ]
+    },
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CheckoutSessionRequest"
+       },
+       "examples": {
+        "fromQuote": {
+         "summary": "Reuse a quote_id (no second carrier call)",
+         "value": {
+          "quote_id": "q_8f3c2e1a4b7d",
+          "service": "USPS Ground Advantage"
+         }
+        },
+        "fromShipment": {
+         "summary": "Price live and open checkout in one call",
+         "value": {
+          "product": "Yamaha FG800 acoustic guitar in a hard case",
+          "from_zip": "07102",
+          "to_zip": "30303",
+          "to_country": "US",
+          "quantity": 1
+         }
+        }
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "The session: intent, method, amount, currency, service, handoff_url, session_id, note. Keep session_id for getCheckoutStatus.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CheckoutSession"
+        },
+        "example": {
+         "intent": "session",
+         "session_id": "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33",
+         "method": [
+          "stripe",
+          "card"
+         ],
+         "amount": 38.42,
+         "currency": "USD",
+         "service": "USPS Ground Advantage",
+         "handoff_url": "https://smklog.com/assets/calculator?product=Yamaha+FG800+acoustic+guitar+in+a+hard+case&from_postal_code=07102&to_postal_code=30303&agent_session=as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33",
+         "identified_product_title": "Yamaha FG800 acoustic guitar in a hard case",
+         "quote_reused": true,
+         "note": "Live quote at this moment, not a hold. The human confirms the shipping consents and pays on the checkout page. Keep session_id: get_checkout_status reports when the human has paid and when the label exists."
+        }
+       }
+      }
+     },
+     "400": {
+      "description": "invalid_json or invalid_request — the body is not the documented shape.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        },
+        "example": {
+         "error": "invalid_request",
+         "message": "JSON object body required."
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "session_failed — unpriceable, restricted, not a parcel, or more than one box.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        },
+        "example": {
+         "error": "session_failed",
+         "message": "This shipment is past parcel limits; SMKlog sells parcel labels only."
+        }
+       }
+      }
+     },
+     "429": {
+      "description": "rate_limited. Slow down; the same buckets cover /quote and /mcp (about 80 quote requests an hour per client).",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        },
+        "example": {
+         "error": "rate_limited",
+         "message": "Too many Smart Quote API requests from this client. Try again later."
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/agent/checkout-session/{session_id}": {
+   "get": {
+    "operationId": "getCheckoutStatus",
+    "tags": [
+     "checkout"
+    ],
+    "summary": "Read where a payment session stands",
+    "description": "The stage of the checkout a payment session led to: awaiting_checkout, checkout_started, paid, label_ready (with the tracking number), delivered or refunded. Reads SMKlog order records only, no carrier call. Sessions live 30 days; an unknown or expired id answers 404 session_not_found. The answer never carries names, addresses or emails.",
+    "parameters": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "pattern": "^as_[A-Za-z0-9-]{8,80}$"
+      },
+      "description": "The session_id returned by createPaymentSession.",
+      "example": "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33"
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "session_id, status, created_at, expires_at, amount, currency, service, checkout (order_id, paid, label_ready, carrier, service, tracking_number, tracking_status, estimated_delivery, delivered_at) and next.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CheckoutStatus"
+        },
+        "example": {
+         "session_id": "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33",
+         "status": "label_ready",
+         "created_at": "2026-10-12T15:04:05.000Z",
+         "expires_at": "2026-11-11T15:04:05.000Z",
+         "amount": 38.42,
+         "currency": "USD",
+         "service": "USPS Ground Advantage",
+         "quote_reused": true,
+         "checkout": {
+          "order_id": "c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+          "started_at": "2026-10-12T15:09:41.000Z",
+          "paid": true,
+          "label_ready": true,
+          "refunded": false,
+          "carrier": "USPS",
+          "service": "Ground Advantage",
+          "tracking_number": "9400100000000000000000",
+          "tracking_status": "in_transit",
+          "estimated_delivery": "2026-10-16",
+          "delivered_at": null
+         },
+         "next": "Label bought. Pass tracking_number to track_parcel for scan events."
+        }
+       }
+      }
+     },
+     "404": {
+      "description": "session_not_found — unknown, malformed or expired session_id.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        },
+        "example": {
+         "error": "session_not_found",
+         "message": "No payment session with this id. Sessions answer for 30 days."
+        }
+       }
+      }
+     },
+     "429": {
+      "description": "rate_limited — 60 checks an hour per client.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        },
+        "example": {
+         "error": "rate_limited",
+         "message": "Too many Smart Quote API requests from this client. Try again later."
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/status": {
+   "get": {
+    "operationId": "status",
+    "tags": [
+     "operations"
+    ],
+    "summary": "Liveness probe",
+    "description": "Answers 200 with the serving version while the service is up. Linked from the RFC 9727 api-catalog as the status relation; it carries no incident history — the status page at https://smklog.com/developers/status does.",
+    "security": [
+     {}
+    ],
+    "responses": {
+     "200": {
+      "description": "ok",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Liveness"
+        },
+        "example": {
+         "ok": true,
+         "service": "smklog-quote-api",
+         "version": "1.4.0",
+         "time": "2026-10-12T15:04:05.000Z",
+         "last_estimate_race": null
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "QuoteRequest": {
+    "type": "object",
+    "description": "One shipment to price. Name the item in plain words (the packed box is estimated) or send the four packed measurements and skip the estimate.",
+    "required": [
+     "quantity",
+     "from_postal_code",
+     "to_postal_code"
+    ],
+    "properties": {
+     "product": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Plain-words item description, e.g. \"Yamaha FG800 acoustic guitar in a hard case\". Required unless product_url is given. Drives the box and weight estimate when dimensions are omitted. Text that names no shippable item answers 400 product_not_recognized."
+     },
+     "product_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Store product page URL; the item is identified from the page. Alternative to product."
+     },
+     "quantity": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "How many of the item ship together. Default 1. Units the estimate packs into one box are priced as that box; units that need more than one box, or a quantity above 1 sent with exact dimensions (those describe one box), return mode multiple_boxes with empty rates."
+     },
+     "from_postal_code": {
+      "type": "string",
+      "pattern": "^[0-9]{5}$",
+      "description": "5-digit US ZIP; the origin is always in the United States."
+     },
+     "to_postal_code": {
+      "type": "string",
+      "maxLength": 12,
+      "description": "5-digit US ZIP when to_country_code is US or omitted; otherwise the destination country's own postal code."
+     },
+     "to_country_code": {
+      "type": "string",
+      "enum": [
+       "US",
+       "CA",
+       "GB",
+       "DE",
+       "AU"
+      ],
+      "default": "US",
+      "description": "Destination country. Sold online: US, CA, GB, DE, AU; any other answers mode international_unsupported_online with no rates."
+     },
+     "length_cm": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 300,
+      "description": "Packed box length. Supply all four of length_cm, width_cm, height_cm, weight_kg to skip the estimate."
+     },
+     "width_cm": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 300,
+      "description": "Packed box width, cm."
+     },
+     "height_cm": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 300,
+      "description": "Packed box height, cm."
+     },
+     "weight_kg": {
+      "type": "number",
+      "minimum": 0.1,
+      "maximum": 1000,
+      "description": "Packed weight, kg. Online pricing stops at 68 kg (150 lb), 274 cm (108 in) on the longest side and 419 cm (165 in) of length plus girth; beyond that the response is mode not_a_parcel."
+     },
+     "package_source": {
+      "type": "string",
+      "enum": [
+       "manual"
+      ],
+      "description": "Set to \"manual\" when supplying exact dimensions."
+     }
+    }
+   },
+   "Package": {
+    "type": "object",
+    "description": "The packed box used for pricing: what the estimator (or the caller) said the parcel measures, with the confidence and the assumptions behind an estimate.",
+    "properties": {
+     "quantity": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Units packed into this box"
+     },
+     "length_cm": {
+      "type": "number",
+      "description": "Packed length, cm"
+     },
+     "width_cm": {
+      "type": "number",
+      "description": "Packed width, cm"
+     },
+     "height_cm": {
+      "type": "number",
+      "description": "Packed height, cm"
+     },
+     "weight_kg": {
+      "type": "number",
+      "description": "Packed weight, kg"
+     },
+     "description": {
+      "type": "string",
+      "description": "What the box holds, in a few words"
+     },
+     "confidence": {
+      "type": "string",
+      "enum": [
+       "low",
+       "medium",
+       "high",
+       "manual"
+      ],
+      "description": "How sure the estimate is; manual when the caller supplied the measurements"
+     },
+     "assumptions": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "What the estimate took for granted, for the human to correct before paying"
+     }
+    }
+   },
+   "Rate": {
+    "type": "object",
+    "description": "One purchasable service. Two prices are returned and they are not interchangeable: amount is the checkout total a customer pays, with the SMKlog fee inside it (the fee is itemized only on the checkout receipt), and retail_amount is the carrier’s own counter price for the same parcel where the carrier publishes one (0 where it does not).",
+    "required": [
+     "carrier",
+     "service",
+     "amount",
+     "currency"
+    ],
+    "properties": {
+     "carrier": {
+      "type": "string",
+      "enum": [
+       "USPS",
+       "UPS",
+       "FedEx",
+       "DHL"
+      ],
+      "description": "USPS, UPS, FedEx or DHL"
+     },
+     "service": {
+      "type": "string",
+      "description": "Service display name, e.g. Ground Advantage"
+     },
+     "service_code": {
+      "type": "string",
+      "description": "Carrier service code, stable across calls"
+     },
+     "amount": {
+      "type": "number",
+      "description": "Checkout total, USD, SMKlog fee inside"
+     },
+     "retail_amount": {
+      "type": "number",
+      "description": "Carrier retail counter price, USD; 0 when not published"
+     },
+     "delivery_days": {
+      "type": [
+       "integer",
+       "null"
+      ],
+      "description": "Transit days the carrier quoted, null when it quoted none"
+     },
+     "delivery_window": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "e.g. \"2-5 business days\"; null when the carrier quoted none"
+     },
+     "delivery_estimated_date": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "ISO date the carrier estimates, null when it gives none"
+     },
+     "currency": {
+      "type": "string",
+      "enum": [
+       "USD"
+      ],
+      "description": "Always USD"
+     }
+    }
+   },
+   "QuoteResponse": {
+    "type": "object",
+    "description": "A priced parcel, or a parcel the service will not price with the reason spelled out in mode. Only mode parcel_label_ready carries rates.",
+    "required": [
+     "mode",
+     "rates"
+    ],
+    "properties": {
+     "mode": {
+      "type": "string",
+      "enum": [
+       "parcel_label_ready",
+       "not_a_parcel",
+       "multiple_boxes",
+       "international_unsupported_online",
+       "parcel_restricted",
+       "review",
+       "parcel_rates_unavailable"
+      ],
+      "description": "parcel_label_ready with up to 5 rates; not_a_parcel (empty rates: SMKlog does not arrange pallet or freight shipments); multiple_boxes (empty rates: quote each box on its own); international_unsupported_online; parcel_restricted and review (empty rates with an explanation); parcel_rates_unavailable (no carrier answered)."
+     },
+     "identified_product_title": {
+      "type": "string",
+      "description": "What the estimator understood the item to be"
+     },
+     "package": {
+      "$ref": "#/components/schemas/Package"
+     },
+     "packages": {
+      "type": "array",
+      "items": {
+       "$ref": "#/components/schemas/Package"
+      },
+      "description": "Every box the estimate produced; one entry when the shipment is one parcel"
+     },
+     "rates": {
+      "type": "array",
+      "maxItems": 5,
+      "items": {
+       "$ref": "#/components/schemas/Rate"
+      },
+      "description": "Up to five purchasable services, best value first"
+     },
+     "dangerous_goods": {
+      "type": [
+       "object",
+       "null"
+      ],
+      "description": "Present when the item matched a dangerous-goods rule: the rule, the carrier restriction and what the human must confirm at checkout",
+      "additionalProperties": true
+     },
+     "sources": {
+      "type": "array",
+      "items": {
+       "type": "object",
+       "properties": {
+        "title": {
+         "type": "string"
+        },
+        "url": {
+         "type": "string",
+         "format": "uri"
+        }
+       }
+      },
+      "description": "Product pages the estimate read, when a search informed it"
+     },
+     "notice": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "description": "Human-readable reason when mode is not parcel_label_ready"
+     },
+     "source": {
+      "type": "object",
+      "description": "Where the package estimate and the rates came from",
+      "properties": {
+       "package": {
+        "type": "string",
+        "description": "manual, catalog, or the estimator that produced the box"
+       },
+       "rates": {
+        "type": "string",
+        "description": "live_carrier for live carrier rating, not_a_parcel when nothing was priced"
+       }
+      },
+      "additionalProperties": true
+     }
+    },
+    "additionalProperties": true
+   },
+   "CheckoutSessionRequest": {
+    "type": "object",
+    "description": "The shipment to open a checkout for: a quote_id from a previous quote, or the shipment itself.",
+    "properties": {
+     "quote_id": {
+      "type": "string",
+      "description": "quote_id from a previous get_parcel_quote call, valid 15 minutes. When given, the shipment comes from that quote and product, from_zip, to_zip, to_country and quantity are ignored."
+     },
+     "product": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Required unless quote_id is given."
+     },
+     "from_zip": {
+      "type": "string",
+      "pattern": "^[0-9]{5}$",
+      "description": "5-digit US ZIP. Required unless quote_id is given."
+     },
+     "to_zip": {
+      "type": "string",
+      "maxLength": 12,
+      "description": "5-digit US ZIP, or the destination country's own postal code. Required unless quote_id is given."
+     },
+     "to_country": {
+      "type": "string",
+      "enum": [
+       "US",
+       "CA",
+       "GB",
+       "DE",
+       "AU"
+      ],
+      "default": "US",
+      "description": "Two-letter destination country"
+     },
+     "quantity": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "How many of the item ship together. Default 1. Units that fit one box get a session for that box; more than one box, or a quantity above 1 sent with exact dimensions, returns no session — one label per box, so create one session per box."
+     },
+     "service": {
+      "type": "string",
+      "description": "Optional service to anchor the amount, matched as a case-insensitive fragment of the display name; cheapest when omitted or unmatched."
+     }
+    }
+   },
+   "CheckoutSession": {
+    "type": "object",
+    "description": "A payment session, not a charge: the amount and the handoff URL where the human pays. The amount is a live quote at this moment, not a hold or a reservation, and no money moves until the human completes the page.",
+    "required": [
+     "intent",
+     "amount",
+     "currency",
+     "handoff_url"
+    ],
+    "properties": {
+     "intent": {
+      "type": "string",
+      "enum": [
+       "session"
+      ],
+      "description": "Always \"session\" — this operation never charges"
+     },
+     "session_id": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "pattern": "^as_[A-Za-z0-9-]{8,80}$",
+      "description": "Handle for getCheckoutStatus, shaped as_ plus a UUID, good for 30 days. Null only when the session record could not be stored."
+     },
+     "method": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Payment rails behind the checkout, e.g. stripe, card"
+     },
+     "amount": {
+      "type": "number",
+      "description": "Live-quoted checkout total for the anchored service, USD"
+     },
+     "currency": {
+      "type": "string",
+      "enum": [
+       "USD"
+      ],
+      "description": "ISO currency, USD"
+     },
+     "service": {
+      "type": "string",
+      "description": "The service the amount is anchored to"
+     },
+     "handoff_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Opens the SMKlog checkout prefilled with this shipment"
+     },
+     "identified_product_title": {
+      "type": "string",
+      "description": "What the estimator understood the item to be"
+     },
+     "quote_reused": {
+      "type": "boolean",
+      "description": "True when the amount came from a quote_id you supplied, so no carrier call was spent"
+     },
+     "note": {
+      "type": "string",
+      "description": "Standing caveats: live quote, human confirms consents and pays"
+     }
+    }
+   },
+   "CheckoutStatus": {
+    "type": "object",
+    "description": "The stage of the checkout a session led to, derived from the order record. Never carries names, addresses or emails.",
+    "required": [
+     "session_id",
+     "status"
+    ],
+    "properties": {
+     "session_id": {
+      "type": "string",
+      "description": "The session asked about"
+     },
+     "status": {
+      "type": "string",
+      "enum": [
+       "awaiting_checkout",
+       "checkout_started",
+       "paid",
+       "label_ready",
+       "delivered",
+       "refunded"
+      ],
+      "description": "Stage, in that order"
+     },
+     "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the session was made"
+     },
+     "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the session stops answering"
+     },
+     "amount": {
+      "type": "number",
+      "description": "The amount the session was anchored to, USD"
+     },
+     "currency": {
+      "type": "string",
+      "enum": [
+       "USD"
+      ],
+      "description": "ISO currency, USD"
+     },
+     "service": {
+      "type": "string",
+      "description": "The service the session was anchored to"
+     },
+     "quote_reused": {
+      "type": "boolean",
+      "description": "Whether the session reused a quote_id"
+     },
+     "checkout": {
+      "type": [
+       "object",
+       "null"
+      ],
+      "description": "The checkout the human started, null while awaiting_checkout",
+      "properties": {
+       "order_id": {
+        "type": "string",
+        "description": "SMKlog order id, the reference for support"
+       },
+       "started_at": {
+        "type": "string",
+        "format": "date-time",
+        "description": "When the checkout was created"
+       },
+       "paid": {
+        "type": "boolean"
+       },
+       "label_ready": {
+        "type": "boolean"
+       },
+       "refunded": {
+        "type": "boolean"
+       },
+       "carrier": {
+        "type": [
+         "string",
+         "null"
+        ],
+        "description": "USPS, UPS, FedEx or DHL"
+       },
+       "service": {
+        "type": [
+         "string",
+         "null"
+        ],
+        "description": "The service the human actually chose"
+       },
+       "tracking_number": {
+        "type": [
+         "string",
+         "null"
+        ],
+        "description": "Present from label_ready on"
+       },
+       "tracking_status": {
+        "type": [
+         "string",
+         "null"
+        ],
+        "description": "Latest carrier status when known"
+       },
+       "estimated_delivery": {
+        "type": [
+         "string",
+         "null"
+        ],
+        "description": "ISO date when the carrier gives one"
+       },
+       "delivered_at": {
+        "type": [
+         "string",
+         "null"
+        ],
+        "format": "date-time"
+       }
+      }
+     },
+     "next": {
+      "type": "string",
+      "description": "What, if anything, the agent should do now"
+     }
+    }
+   },
+   "Liveness": {
+    "type": "object",
+    "description": "The liveness answer: the service is up and which version is serving.",
+    "required": [
+     "ok",
+     "service",
+     "version",
+     "time"
+    ],
+    "properties": {
+     "ok": {
+      "type": "boolean",
+      "enum": [
+       true
+      ]
+     },
+     "service": {
+      "type": "string",
+      "enum": [
+       "smklog-quote-api"
+      ]
+     },
+     "version": {
+      "type": "string",
+      "description": "Product version shared by the OpenAPI, the MCP server and the agent card"
+     },
+     "time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Server time, ISO 8601"
+     },
+     "last_estimate_race": {
+      "type": [
+       "object",
+       "null"
+      ],
+      "description": "Diagnostic: the latest estimator race outcome, null when none is recorded",
+      "additionalProperties": true
+     }
+    }
+   },
+   "Problem": {
+    "type": "object",
+    "description": "Every error answer on this host: a stable machine-readable code in error, a sentence for the human in message, and the missing field names when the code is missing_required_fields.",
+    "required": [
+     "error"
+    ],
+    "properties": {
+     "error": {
+      "type": "string",
+      "description": "Stable code: invalid_json, invalid_request, missing_required_fields, product_not_recognized, product_url_not_detected, session_failed, session_not_found, rate_limited, invalid_token"
+     },
+     "message": {
+      "type": "string",
+      "description": "What went wrong, in a sentence"
+     },
+     "missing": {
+      "type": "array",
+      "items": {
+       "type": "string"
+      },
+      "description": "Field names still needed, with missing_required_fields and product_not_recognized"
+     }
+    }
+   }
+  },
+  "securitySchemes": {
+   "clientCredentials": {
+    "type": "oauth2",
+    "description": "Optional. Every operation works without a token. A client that wants its own hourly rate-limit bucket holds OAuth 2.0 client_credentials issued by hand (registration instructions at https://smklog.com/auth.md) and sends the opaque bearer it gets from /oauth/token. Discovery: /.well-known/oauth-authorization-server.",
+    "flows": {
+     "clientCredentials": {
+      "tokenUrl": "https://quote-api.smklog.com/oauth/token",
+      "scopes": {
+       "quote": "Price parcels and prepare checkouts from a dedicated per-client rate-limit bucket"
+      }
+     }
+    }
+   }
+  }
+ },
+ "x-mcp": {
+  "transport": "streamable-http",
+  "endpoint": "https://quote-api.smklog.com/mcp",
+  "serverCard": "https://quote-api.smklog.com/.well-known/mcp/server-card.json"
+ }
+}

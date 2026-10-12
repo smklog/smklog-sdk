@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smklog.com/developers/schemas/checkout-session-request.schema.json",
+  "title": "CheckoutSessionRequest",
+  "type": "object",
+  "description": "The shipment to open a checkout for: a quote_id from a previous quote, or the shipment itself.",
+  "properties": {
+    "quote_id": {
+      "type": "string",
+      "description": "quote_id from a previous get_parcel_quote call, valid 15 minutes. When given, the shipment comes from that quote and product, from_zip, to_zip, to_country and quantity are ignored."
+    },
+    "product": {
+      "type": "string",
+      "maxLength": 2000,
+      "description": "Required unless quote_id is given."
+    },
+    "from_zip": {
+      "type": "string",
+      "pattern": "^[0-9]{5}$",
+      "description": "5-digit US ZIP. Required unless quote_id is given."
+    },
+    "to_zip": {
+      "type": "string",
+      "maxLength": 12,
+      "description": "5-digit US ZIP, or the destination country's own postal code. Required unless quote_id is given."
+    },
+    "to_country": {
+      "type": "string",
+      "enum": [
+        "US",
+        "CA",
+        "GB",
+        "DE",
+        "AU"
+      ],
+      "default": "US",
+      "description": "Two-letter destination country"
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "How many of the item ship together. Default 1. Units that fit one box get a session for that box; more than one box, or a quantity above 1 sent with exact dimensions, returns no session — one label per box, so create one session per box."
+    },
+    "service": {
+      "type": "string",
+      "description": "Optional service to anchor the amount, matched as a case-insensitive fragment of the display name; cheapest when omitted or unmatched."
+    }
+  },
+  "x-provenance": {
+    "method": "published",
+    "publisher": "SMKlog (SMKLOG-2022 LLC)",
+    "source": "https://quote-api.smklog.com/openapi.json",
+    "published": "2026-10-12"
+  }
+}

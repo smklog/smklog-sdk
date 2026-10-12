@@ -1,0 +1,54 @@
+{
+  "operationId": "getCheckoutStatus",
+  "method": "GET",
+  "path": "/agent/checkout-session/{session_id}",
+  "responses": {
+    "200": [
+      {
+        "name": "default",
+        "value": {
+          "session_id": "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33",
+          "status": "label_ready",
+          "created_at": "2026-10-12T15:04:05.000Z",
+          "expires_at": "2026-11-11T15:04:05.000Z",
+          "amount": 38.42,
+          "currency": "USD",
+          "service": "USPS Ground Advantage",
+          "quote_reused": true,
+          "checkout": {
+            "order_id": "c1d2e3f4-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+            "started_at": "2026-10-12T15:09:41.000Z",
+            "paid": true,
+            "label_ready": true,
+            "refunded": false,
+            "carrier": "USPS",
+            "service": "Ground Advantage",
+            "tracking_number": "9400100000000000000000",
+            "tracking_status": "in_transit",
+            "estimated_delivery": "2026-10-16",
+            "delivered_at": null
+          },
+          "next": "Label bought. Pass tracking_number to track_parcel for scan events."
+        }
+      }
+    ],
+    "404": [
+      {
+        "name": "default",
+        "value": {
+          "error": "session_not_found",
+          "message": "No payment session with this id. Sessions answer for 30 days."
+        }
+      }
+    ],
+    "429": [
+      {
+        "name": "default",
+        "value": {
+          "error": "rate_limited",
+          "message": "Too many Smart Quote API requests from this client. Try again later."
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smklog.com/developers/schemas/checkout-status.schema.json",
+  "title": "CheckoutStatus",
+  "type": "object",
+  "description": "The stage of the checkout a session led to, derived from the order record. Never carries names, addresses or emails.",
+  "required": [
+    "session_id",
+    "status"
+  ],
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "The session asked about"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "awaiting_checkout",
+        "checkout_started",
+        "paid",
+        "label_ready",
+        "delivered",
+        "refunded"
+      ],
+      "description": "Stage, in that order"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the session was made"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the session stops answering"
+    },
+    "amount": {
+      "type": "number",
+      "description": "The amount the session was anchored to, USD"
+    },
+    "currency": {
+      "type": "string",
+      "enum": [
+        "USD"
+      ],
+      "description": "ISO currency, USD"
+    },
+    "service": {
+      "type": "string",
+      "description": "The service the session was anchored to"
+    },
+    "quote_reused": {
+      "type": "boolean",
+      "description": "Whether the session reused a quote_id"
+    },
+    "checkout": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "The checkout the human started, null while awaiting_checkout",
+      "properties": {
+        "order_id": {
+          "type": "string",
+          "description": "SMKlog order id, the reference for support"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the checkout was created"
+        },
+        "paid": {
+          "type": "boolean"
+        },
+        "label_ready": {
+          "type": "boolean"
+        },
+        "refunded": {
+          "type": "boolean"
+        },
+        "carrier": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "USPS, UPS, FedEx or DHL"
+        },
+        "service": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The service the human actually chose"
+        },
+        "tracking_number": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Present from label_ready on"
+        },
+        "tracking_status": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Latest carrier status when known"
+        },
+        "estimated_delivery": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "ISO date when the carrier gives one"
+        },
+        "delivered_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "next": {
+      "type": "string",
+      "description": "What, if anything, the agent should do now"
+    }
+  },
+  "x-provenance": {
+    "method": "published",
+    "publisher": "SMKlog (SMKLOG-2022 LLC)",
+    "source": "https://quote-api.smklog.com/openapi.json",
+    "published": "2026-10-12"
+  }
+}

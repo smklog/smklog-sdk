@@ -1,0 +1,284 @@
+{
+  "@context": {
+    "@version": 1.1,
+    "smk": "https://smklog.com/developers/vocab#",
+    "schema": "https://schema.org/",
+    "xsd": "http://www.w3.org/2001/XMLSchema#",
+    "QuoteRequest": "smk:QuoteRequest",
+    "Package": "smk:Package",
+    "Rate": "smk:Rate",
+    "QuoteResponse": "smk:QuoteResponse",
+    "CheckoutSessionRequest": "smk:CheckoutSessionRequest",
+    "CheckoutSession": "smk:CheckoutSession",
+    "CheckoutStatus": "smk:CheckoutStatus",
+    "Liveness": "smk:Liveness",
+    "Problem": "smk:Problem",
+    "product": {
+      "@id": "smk:product",
+      "@type": "xsd:string"
+    },
+    "product_url": {
+      "@id": "smk:product_url",
+      "@type": "@id"
+    },
+    "quantity": {
+      "@id": "schema:quantity",
+      "@type": "xsd:integer"
+    },
+    "from_postal_code": {
+      "@id": "smk:from_postal_code",
+      "@type": "xsd:string"
+    },
+    "to_postal_code": {
+      "@id": "smk:to_postal_code",
+      "@type": "xsd:string"
+    },
+    "to_country_code": {
+      "@id": "smk:to_country_code",
+      "@type": "xsd:string"
+    },
+    "length_cm": {
+      "@id": "smk:length_cm",
+      "@type": "xsd:decimal"
+    },
+    "width_cm": {
+      "@id": "smk:width_cm",
+      "@type": "xsd:decimal"
+    },
+    "height_cm": {
+      "@id": "smk:height_cm",
+      "@type": "xsd:decimal"
+    },
+    "weight_kg": {
+      "@id": "smk:weight_kg",
+      "@type": "xsd:decimal"
+    },
+    "package_source": {
+      "@id": "smk:package_source",
+      "@type": "xsd:string"
+    },
+    "description": {
+      "@id": "schema:description",
+      "@type": "xsd:string"
+    },
+    "confidence": {
+      "@id": "smk:confidence",
+      "@type": "xsd:string"
+    },
+    "assumptions": {
+      "@id": "smk:assumptions",
+      "@container": "@list"
+    },
+    "carrier": {
+      "@id": "smk:carrier",
+      "@type": "xsd:string"
+    },
+    "service": {
+      "@id": "smk:service",
+      "@type": "xsd:string"
+    },
+    "service_code": {
+      "@id": "smk:service_code",
+      "@type": "xsd:string"
+    },
+    "amount": {
+      "@id": "smk:amount",
+      "@type": "xsd:decimal"
+    },
+    "retail_amount": {
+      "@id": "smk:retail_amount",
+      "@type": "xsd:decimal"
+    },
+    "delivery_days": {
+      "@id": "smk:delivery_days",
+      "@type": "xsd:integer"
+    },
+    "delivery_window": {
+      "@id": "smk:delivery_window",
+      "@type": "xsd:string"
+    },
+    "delivery_estimated_date": {
+      "@id": "smk:delivery_estimated_date",
+      "@type": "xsd:string"
+    },
+    "currency": {
+      "@id": "schema:priceCurrency",
+      "@type": "xsd:string"
+    },
+    "mode": {
+      "@id": "smk:mode",
+      "@type": "xsd:string"
+    },
+    "identified_product_title": {
+      "@id": "smk:identified_product_title",
+      "@type": "xsd:string"
+    },
+    "package": {
+      "@id": "smk:package"
+    },
+    "packages": {
+      "@id": "smk:packages",
+      "@container": "@list",
+      "@type": "@id"
+    },
+    "rates": {
+      "@id": "smk:rates",
+      "@container": "@list",
+      "@type": "@id"
+    },
+    "dangerous_goods": {
+      "@id": "smk:dangerous_goods"
+    },
+    "sources": {
+      "@id": "smk:sources",
+      "@container": "@list"
+    },
+    "title": {
+      "@id": "schema:name",
+      "@type": "xsd:string"
+    },
+    "url": {
+      "@id": "schema:url",
+      "@type": "@id"
+    },
+    "notice": {
+      "@id": "smk:notice",
+      "@type": "xsd:string"
+    },
+    "source": {
+      "@id": "smk:source"
+    },
+    "quote_id": {
+      "@id": "smk:quote_id",
+      "@type": "xsd:string"
+    },
+    "from_zip": {
+      "@id": "smk:from_zip",
+      "@type": "xsd:string"
+    },
+    "to_zip": {
+      "@id": "smk:to_zip",
+      "@type": "xsd:string"
+    },
+    "to_country": {
+      "@id": "smk:to_country",
+      "@type": "xsd:string"
+    },
+    "intent": {
+      "@id": "smk:intent",
+      "@type": "xsd:string"
+    },
+    "session_id": {
+      "@id": "smk:session_id",
+      "@type": "xsd:string"
+    },
+    "method": {
+      "@id": "smk:method",
+      "@container": "@list"
+    },
+    "handoff_url": {
+      "@id": "smk:handoff_url",
+      "@type": "@id"
+    },
+    "quote_reused": {
+      "@id": "smk:quote_reused",
+      "@type": "xsd:boolean"
+    },
+    "note": {
+      "@id": "smk:note",
+      "@type": "xsd:string"
+    },
+    "status": {
+      "@id": "smk:status",
+      "@type": "xsd:string"
+    },
+    "created_at": {
+      "@id": "smk:created_at",
+      "@type": "xsd:dateTime"
+    },
+    "expires_at": {
+      "@id": "smk:expires_at",
+      "@type": "xsd:dateTime"
+    },
+    "checkout": {
+      "@id": "smk:checkout"
+    },
+    "order_id": {
+      "@id": "smk:order_id",
+      "@type": "xsd:string"
+    },
+    "started_at": {
+      "@id": "smk:started_at",
+      "@type": "xsd:dateTime"
+    },
+    "paid": {
+      "@id": "smk:paid",
+      "@type": "xsd:boolean"
+    },
+    "label_ready": {
+      "@id": "smk:label_ready",
+      "@type": "xsd:boolean"
+    },
+    "refunded": {
+      "@id": "smk:refunded",
+      "@type": "xsd:boolean"
+    },
+    "tracking_number": {
+      "@id": "schema:trackingNumber",
+      "@type": "xsd:string"
+    },
+    "tracking_status": {
+      "@id": "smk:tracking_status",
+      "@type": "xsd:string"
+    },
+    "estimated_delivery": {
+      "@id": "smk:estimated_delivery",
+      "@type": "xsd:string"
+    },
+    "delivered_at": {
+      "@id": "smk:delivered_at",
+      "@type": "xsd:dateTime"
+    },
+    "next": {
+      "@id": "smk:next",
+      "@type": "xsd:string"
+    },
+    "ok": {
+      "@id": "smk:ok",
+      "@type": "xsd:boolean"
+    },
+    "version": {
+      "@id": "smk:version",
+      "@type": "xsd:string"
+    },
+    "time": {
+      "@id": "smk:time",
+      "@type": "xsd:dateTime"
+    },
+    "last_estimate_race": {
+      "@id": "smk:last_estimate_race"
+    },
+    "error": {
+      "@id": "smk:error",
+      "@type": "xsd:string"
+    },
+    "message": {
+      "@id": "smk:message",
+      "@type": "xsd:string"
+    },
+    "missing": {
+      "@id": "smk:missing",
+      "@container": "@list"
+    }
+  },
+  "x-provenance": {
+    "method": "published",
+    "publisher": "SMKlog (SMKLOG-2022 LLC)",
+    "source": "https://smklog.com/developers/schemas/context.jsonld",
+    "published": "2026-10-12"
+  },
+  "x-summary": {
+    "classes": 9,
+    "properties": 65
+  }
+}

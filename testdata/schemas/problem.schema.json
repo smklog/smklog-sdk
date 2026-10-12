@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smklog.com/developers/schemas/problem.schema.json",
+  "title": "Problem",
+  "type": "object",
+  "description": "Every error answer on this host: a stable machine-readable code in error, a sentence for the human in message, and the missing field names when the code is missing_required_fields.",
+  "required": [
+    "error"
+  ],
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Stable code: invalid_json, invalid_request, missing_required_fields, product_not_recognized, product_url_not_detected, session_failed, session_not_found, rate_limited, invalid_token"
+    },
+    "message": {
+      "type": "string",
+      "description": "What went wrong, in a sentence"
+    },
+    "missing": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Field names still needed, with missing_required_fields and product_not_recognized"
+    }
+  },
+  "x-provenance": {
+    "method": "published",
+    "publisher": "SMKlog (SMKLOG-2022 LLC)",
+    "source": "https://quote-api.smklog.com/openapi.json",
+    "published": "2026-10-12"
+  }
+}
