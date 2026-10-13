@@ -1,5 +1,5 @@
-"""The one live test (DESIGN.md, "Tests", item 3): runs only with SMKLOG_LIVE=1 and
-calls status() alone. It never quotes, because a quote spends a carrier rating."""
+"""The one live test: runs only with SMKLOG_LIVE=1 and calls status() alone against
+production. It never quotes, because a quote spends a carrier rating."""
 
 import os
 import unittest

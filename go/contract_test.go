@@ -126,6 +126,6 @@ func TestVersionMovesWithTheOtherClients(t *testing.T) {
 		t.Fatal(err)
 	}
 	if pkg.Version != Version {
-		t.Fatalf("Go Version %q, npm package %q: the three SDKs move together (docs/DESIGN.md, Versioning)", Version, pkg.Version)
+		t.Fatalf("Go Version %q, npm package %q: the three SDKs release the same version together", Version, pkg.Version)
 	}
 }

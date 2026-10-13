@@ -17,26 +17,38 @@ The distribution is `smklog-sdk`; the import package is `smklog`.
 from smklog import SmklogClient
 
 client = SmklogClient()
-item = "Yamaha FG800 acoustic guitar in a hard case"
-quote = client.get_parcel_quote(product=item, from_postal_code="07102", to_postal_code="30303")
+quote = client.get_parcel_quote(product="Yamaha FG800 acoustic guitar in a hard case",
+                                from_postal_code="07102", to_postal_code="30303")
 for rate in quote.rates:                       # best value first, as the API returns them
     print(rate.carrier, rate.service, rate.amount, "counter", rate.retail_amount)
-if quote.is_priced():
-    session = client.create_payment_session(product=item, from_zip="07102", to_zip="30303",
-                                            service=quote.cheapest().service)
+if quote.is_priced() and quote.quote_id:       # the handle is good for 15 minutes
+    best = quote.cheapest()
+    session = client.create_payment_session(quote_id=quote.quote_id, service=best.service)
     print(session.handoff_url)                 # the human confirms and pays here
-    print(client.get_checkout_status(session.session_id).status)
+    if session.session_id:                     # None only when the record was not stored
+        print(client.get_checkout_status(session.session_id).status)
 ```
+
+The pair costs one carrier call: the quote answer carries `quote_id`, and a checkout
+opened with it reuses those rates (`session.quote_reused` is true) instead of pricing
+the shipment again.
 
 Exact measurements skip the box estimate: pass all four of `length_cm`, `width_cm`,
 `height_cm`, `weight_kg` (the client marks the package `manual`). A request can also be a
 `QuoteRequest` / `CheckoutSessionRequest` model or a plain dict; fields keep the wire names.
 
 Every `get_parcel_quote` call spends a live carrier rating on the server: one call per
-shipment, cache on your side, never poll. `create_payment_session` takes either a
-`quote_id` (preferred when you hold one, for example from the MCP tool: the quote is
-reused and no second carrier call is spent) or the shipment itself, as above; the client
-never turns one into the other.
+shipment, cache on your side, never poll. `create_payment_session` takes one of two forms:
+
+- `create_payment_session(quote_id=..., service=...)`: the quote is reused and no second
+  carrier call is spent. `quote_id` is the handle every priced quote answer carries; it is
+  `None` when nothing was priced or the handle could not be stored. The API ignores any
+  shipment fields sent next to a valid `quote_id`.
+- `create_payment_session(product=..., from_zip=..., to_zip=..., to_country=..., quantity=...,
+  service=...)`: the API prices the shipment live and opens the checkout in one call.
+
+A `quote_id` older than 15 minutes makes the API price the shipment fields live, so send
+them along when the quote may have aged. The client never turns one form into the other.
 
 ## Client options
 
@@ -47,8 +59,8 @@ never turns one into the other.
 | `token` | `None` | Optional OAuth bearer for a dedicated rate-limit bucket ([auth.md](https://smklog.com/auth.md)); sent as `Authorization: Bearer ...` only when set. |
 | `user_agent` | `None` | Suffix appended after `smklog-sdk-python/0.1.0`. |
 
-Operations: `get_parcel_quote(...)` -> `QuoteResponse` (with `rates`, `cheapest()`,
-`is_priced()`), `create_payment_session(...)` -> `CheckoutSession`,
+Operations: `get_parcel_quote(...)` -> `QuoteResponse` (with `quote_id`, `rates`,
+`cheapest()`, `is_priced()`), `create_payment_session(...)` -> `CheckoutSession`,
 `get_checkout_status(session_id)` -> `CheckoutStatus`, `status()` -> `Liveness`.
 
 Every model is a dataclass whose fields are the wire names. Fields this version does
@@ -62,7 +74,10 @@ requests per client), so a retry loop only burns them faster.
 
 Every failure raises `SmklogError` or one of its subclasses, carrying `status` (HTTP
 status, 0 when nothing was sent), `error` (the stable code), `message`, `missing`
-(field names, often empty) and `body` (the response body as received).
+(field names, often empty) and `body` (the response body as received). When the Problem
+carries no `message`, the error's message is the code plus the missing fields
+(`missing_required_fields: missing to_postal_code`). Errors pickle, so they cross a
+`multiprocessing` boundary intact.
 
 | Code | Exception |
 | --- | --- |
@@ -87,9 +102,24 @@ smklog session-status as_... [--json]
 smklog status [--json]
 ```
 
-Human output is a small table; `--json` prints the raw answer. Exit code 0 on a priced
-answer or a successful read, 2 when the API refuses (the Problem is printed) or answers a
-quote without a price, 3 on a rate limit, 1 when the host could not be reached.
+Human output is a small table; `--json` prints the raw answer. A priced `smklog quote`
+also prints the `quote_id` on its own line, ready to pass to `smklog session --quote-id`
+within 15 minutes (`--json` carries it in the body):
+
+```
+$ smklog quote "Yamaha FG800 acoustic guitar in a hard case" 07102 30303
+Yamaha FG800 acoustic guitar in a hard case
+Box: 112 x 48 x 20 cm, 6.4 kg (estimate, medium confidence)
+Carrier  Service           Checkout  Counter  Delivery
+USPS     Ground Advantage  $38.42    $46.95   2-5 business days
+UPS      Ground            $41.10    $67.35   3 days, by 2026-10-16
+quote_id  q_8f3c2e1a4b7d
+$ smklog session --quote-id q_8f3c2e1a4b7d --service "USPS Ground Advantage"
+```
+
+Exit code 0 on a priced answer or a successful read, 2 when the API refuses (the Problem
+is printed) or answers a quote without a price, 3 on a rate limit, 1 when the host could
+not be reached.
 `--base-url` and `--token` (or `SMKLOG_BASE_URL` / `SMKLOG_TOKEN`) are accepted by every
 command. `python -m smklog` runs the same program.
 
@@ -108,4 +138,4 @@ Docs, schemas, playground and status page: [smklog.com/developers](https://smklo
 The contract is the OpenAPI 3.1 document at
 [quote-api.smklog.com/openapi.json](https://quote-api.smklog.com/openapi.json).
 
-MIT (c) SMKLOG-2022 LLC.
+MIT license; see [LICENSE](LICENSE).

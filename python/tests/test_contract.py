@@ -1,5 +1,9 @@
-"""The client against the vendored OpenAPI document (DESIGN.md, "Tests", item 2)."""
+"""The client against the vendored contract: every operation the OpenAPI document
+declares has a client method, every documented problem code maps to its exception,
+every schema property is a typed model field, and the local checks are the schema's."""
 
+import dataclasses
+import glob
 import os
 import re
 import unittest
@@ -8,7 +12,8 @@ import support
 
 import smklog
 from smklog import SmklogClient
-from smklog.errors import ERROR_TYPES
+from smklog import models
+from smklog.errors import ERROR_TYPES, error_for
 
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
@@ -43,14 +48,41 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(SmklogClient().base_url, self.document["servers"][0]["url"].rstrip("/"))
         self.assertEqual(smklog.DEFAULT_BASE_URL, "https://quote-api.smklog.com")
 
-    def test_every_problem_code_in_the_document_has_a_home(self) -> None:
+    def test_every_problem_code_maps_to_its_exception(self) -> None:
+        expected = {
+            "rate_limited": smklog.RateLimitedError,
+            "slow_down": smklog.RateLimitedError,
+            "product_not_recognized": smklog.InvalidRequestError,
+            "product_url_not_detected": smklog.InvalidRequestError,
+            "missing_required_fields": smklog.InvalidRequestError,
+            "invalid_request": smklog.InvalidRequestError,
+            "invalid_json": smklog.InvalidRequestError,
+            "session_not_found": smklog.NotFoundError,
+            "session_failed": smklog.SessionFailedError,
+            # invalid_token has no specialization of its own: it is the base error.
+            "invalid_token": smklog.SmklogError,
+        }
         description = self.document["components"]["schemas"]["Problem"]["properties"]["error"]["description"]
-        codes = re.findall(r"[a-z]+(?:_[a-z]+)+", description)
-        self.assertIn("rate_limited", codes)
-        for code in codes:
-            # invalid_token has no specialization by design: it is the base error.
-            self.assertIn(ERROR_TYPES.get(code, smklog.SmklogError).__name__,
-                          {"RateLimitedError", "InvalidRequestError", "NotFoundError", "SessionFailedError", "SmklogError"})
+        documented = set(re.findall(r"[a-z]+(?:_[a-z]+)+", description))
+        self.assertEqual(documented, set(expected) - {"slow_down"},
+                         "a code appeared in or left the document; decide its exception here")
+        self.assertEqual(ERROR_TYPES, {code: cls for code, cls in expected.items() if cls is not smklog.SmklogError})
+        for code, cls in expected.items():
+            self.assertIs(type(error_for(400, {"error": code})), cls, code)
+        self.assertIs(type(error_for(500, {"error": "something_new"})), smklog.SmklogError)
+
+    def test_every_schema_property_is_a_model_field(self) -> None:
+        # The model for each schema is its title; the nested checkout object has no
+        # schema file of its own and is covered through CheckoutStatus.
+        for path in sorted(glob.glob(os.path.join(support.TESTDATA, "schemas", "*.schema.json"))):
+            schema = support.load_json("schemas", os.path.basename(path))
+            model = getattr(models, schema["title"])
+            declared = {f.name for f in dataclasses.fields(model) if f.init}
+            self.assertEqual(set(schema["properties"]) - declared, set(),
+                             "%s names properties %s has no field for" % (os.path.basename(path), schema["title"]))
+        quote_id = self.document["components"]["schemas"]["QuoteResponse"]["properties"]["quote_id"]
+        self.assertEqual(quote_id["type"], ["string", "null"])
+        self.assertIsNone(models.QuoteResponse().quote_id)
 
     def test_sdk_version_is_pinned_everywhere(self) -> None:
         pyproject = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "pyproject.toml")

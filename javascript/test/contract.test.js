@@ -38,6 +38,18 @@ test('every component schema is declared in index.d.ts', () => {
   }
 });
 
+// Models mirror the schemas field for field, so a property the contract names
+// (quote_id on QuoteResponse, for one) must be declared and not left to the
+// index signature, where TypeScript would type it as unknown.
+test('every property of every component schema is a declared member in index.d.ts', () => {
+  for (const [name, schema] of Object.entries(openapi.components.schemas)) {
+    for (const property of Object.keys(schema.properties || {})) {
+      const declared = new RegExp(`^\\s+${property}\\??:`, 'm').test(declarations);
+      assert.ok(declared, `${name}.${property} is in the contract but not declared in index.d.ts`);
+    }
+  }
+});
+
 test('the default base URL is the production server from the contract', () => {
   assert.equal(new SmklogClient().baseUrl, openapi.servers[0].url);
 });

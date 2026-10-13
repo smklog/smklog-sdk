@@ -1,8 +1,8 @@
 package smklog
 
 // Replays testdata/samples/*.json from a local HTTP server. Nothing here
-// touches the network except the one live test at the bottom, which runs only
-// with SMKLOG_LIVE=1 and calls Status alone: a quote spends real money.
+// touches the network; the one opt-in live call (SMKLOG_LIVE=1, Status only)
+// lives in live_test.go.
 
 import (
 	"context"
@@ -228,7 +228,12 @@ func apiErr(t *testing.T, err error) *APIError {
 	return e
 }
 
-const sessionID = "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33"
+// The ids the vendored samples carry: the priced quote's handle, which the
+// fromQuote session example passes back, and the session the examples return.
+const (
+	quoteID   = "q_8f3c2e1a4b7d"
+	sessionID = "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33"
+)
 
 // --- Round trips -----------------------------------------------------------
 
@@ -264,8 +269,11 @@ func TestGetParcelQuote(t *testing.T) {
 		if best == nil || best.Amount != 38.42 || best != &quote.Rates[0] {
 			t.Fatalf("Cheapest() = %+v, want the first rate at 38.42", best)
 		}
-		if quote.QuoteID() != "" {
-			t.Fatalf("QuoteID() = %q for an answer without quote_id", quote.QuoteID())
+		if quote.QuoteID == nil {
+			t.Fatal("QuoteID = nil for the priced sample")
+		}
+		if *quote.QuoteID != quoteID {
+			t.Fatalf("QuoteID = %q, want %q", *quote.QuoteID, quoteID)
 		}
 	})
 
@@ -336,7 +344,13 @@ func TestGetParcelQuote(t *testing.T) {
 		if quote.Notice == nil || *quote.Notice != asMap(t, notAParcel)["notice"] {
 			t.Fatalf("notice = %v", quote.Notice)
 		}
-		if got, want := asMap(t, marshal(t, quote)), asMap(t, notAParcel); !reflect.DeepEqual(got, want) {
+		if quote.QuoteID != nil {
+			t.Fatalf("QuoteID = %q for an answer without rates", *quote.QuoteID)
+		}
+		// The answer carries no quote_id, so the nullable field re-encodes as null.
+		want := asMap(t, notAParcel)
+		want["quote_id"] = nil
+		if got := asMap(t, marshal(t, quote)); !reflect.DeepEqual(got, want) {
 			t.Fatalf("quote re-encodes to %v, want %v", got, want)
 		}
 	})
@@ -344,7 +358,6 @@ func TestGetParcelQuote(t *testing.T) {
 	t.Run("unknown fields are preserved", func(t *testing.T) {
 		extended := asMap(t, f.quoteOK)
 		extended["added_next_year"] = map[string]any{"nested": true}
-		extended["quote_id"] = "q_8f3c2e1a4b7d"
 		r.reply(answer{status: 200, body: extended})
 		quote, err := r.client().GetParcelQuote(ctx, decodeInto[QuoteRequest](t, example(t, f.quoteRequests, "described")))
 		if err != nil {
@@ -356,9 +369,25 @@ func TestGetParcelQuote(t *testing.T) {
 		if got := asMap(t, marshal(t, quote))["added_next_year"]; !reflect.DeepEqual(got, map[string]any{"nested": true}) {
 			t.Fatalf("re-encoded extra = %v", got)
 		}
-		// quote_id is one of those additional fields; QuoteID reads it out of Extra.
-		if quote.QuoteID() != "q_8f3c2e1a4b7d" {
-			t.Fatalf("QuoteID() = %q", quote.QuoteID())
+		// quote_id is a named field, so it never lands in Extra.
+		if _, extra := quote.Extra["quote_id"]; extra {
+			t.Fatal("quote_id landed in Extra instead of QuoteID")
+		}
+	})
+
+	t.Run("a null quote_id (handle not stored) is nil and round-trips as null", func(t *testing.T) {
+		unstored := asMap(t, f.quoteOK)
+		unstored["quote_id"] = nil
+		r.reply(answer{status: 200, body: unstored})
+		quote, err := r.client().GetParcelQuote(ctx, decodeInto[QuoteRequest](t, example(t, f.quoteRequests, "described")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if quote.QuoteID != nil || !quote.IsPriced() {
+			t.Fatalf("QuoteID = %v (want nil), IsPriced() = %v (want true)", quote.QuoteID, quote.IsPriced())
+		}
+		if got, want := asMap(t, marshal(t, quote)), unstored; !reflect.DeepEqual(got, want) {
+			t.Fatalf("quote re-encodes to %v, want %v", got, want)
 		}
 	})
 }
@@ -385,10 +414,103 @@ func TestCreatePaymentSession(t *testing.T) {
 			if got, want := asMap(t, marshal(t, session)), asMap(t, expected); !reflect.DeepEqual(got, want) {
 				t.Fatalf("session re-encodes to %v, want %v", got, want)
 			}
-			if session.Intent != "session" || session.SessionID != sessionID || session.HandoffURL == "" {
+			if session.Intent != "session" || session.SessionID == nil || *session.SessionID != sessionID || session.HandoffURL == "" {
 				t.Fatalf("session = %+v", session)
 			}
 		})
+	}
+
+	t.Run("a null session_id (record not stored) is nil and round-trips as null", func(t *testing.T) {
+		unstored := asMap(t, expected)
+		unstored["session_id"] = nil
+		r.reply(answer{status: 200, body: unstored})
+		session, err := r.client().CreatePaymentSession(context.Background(), decodeInto[CheckoutSessionRequest](t, example(t, f.sessionRequests, "fromQuote")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if session.SessionID != nil || session.HandoffURL == "" {
+			t.Fatalf("session = %+v", session)
+		}
+		if got, want := asMap(t, marshal(t, session)), unstored; !reflect.DeepEqual(got, want) {
+			t.Fatalf("session re-encodes to %v, want %v", got, want)
+		}
+	})
+
+	t.Run("the quote_id a priced answer carries is sent verbatim, and nothing else", func(t *testing.T) {
+		r.reply(answer{status: 200, body: f.quoteOK}, answer{status: 200, body: expected})
+		client := r.client()
+		quote, err := client.GetParcelQuote(context.Background(), decodeInto[QuoteRequest](t, example(t, f.quoteRequests, "described")))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if quote.QuoteID == nil {
+			t.Fatal("QuoteID = nil for the priced sample")
+		}
+		session, err := client.CreatePaymentSession(context.Background(), CheckoutSessionRequest{QuoteID: *quote.QuoteID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// No quantity default and no shipment fields: the quote names the shipment.
+		if got, want := asMap(t, r.call(t, 1).body), map[string]any{"quote_id": quoteID}; !reflect.DeepEqual(got, want) {
+			t.Fatalf("body sent = %v, want %v", got, want)
+		}
+		if !session.QuoteReused {
+			t.Fatalf("quote_reused = false: %+v", session)
+		}
+	})
+}
+
+// --- The quickstart --------------------------------------------------------
+
+// One carrier call prices the parcel; the session reuses it through QuoteID
+// and GetCheckoutStatus polls the SessionID, each guarded against nil.
+func TestQuoteToCheckoutFlow(t *testing.T) {
+	f := load(t)
+	r := newReplay(t)
+	ctx := context.Background()
+	r.reply(
+		answer{status: 200, body: f.quoteOK},
+		answer{status: 200, body: response(t, f.sessionResponses, 200, "default")},
+		answer{status: 200, body: response(t, f.statusResponses, 200, "default")},
+	)
+	client := r.client()
+
+	quote, err := client.GetParcelQuote(ctx, decodeInto[QuoteRequest](t, example(t, f.quoteRequests, "described")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !quote.IsPriced() || quote.QuoteID == nil {
+		t.Fatalf("IsPriced() = %v, QuoteID = %v", quote.IsPriced(), quote.QuoteID)
+	}
+	// The fromQuote example passes back the very handle the priced answer carries.
+	if fromQuote := asMap(t, example(t, f.sessionRequests, "fromQuote"))["quote_id"]; fromQuote != *quote.QuoteID {
+		t.Fatalf("fromQuote example sends %v, the priced answer carries %q", fromQuote, *quote.QuoteID)
+	}
+	best := quote.Cheapest()
+
+	session, err := client.CreatePaymentSession(ctx, CheckoutSessionRequest{QuoteID: *quote.QuoteID, Service: best.Service})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := asMap(t, r.call(t, 1).body), map[string]any{"quote_id": quoteID, "service": best.Service}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("session body sent = %v, want %v", got, want)
+	}
+	if !session.QuoteReused || session.SessionID == nil || session.HandoffURL == "" {
+		t.Fatalf("session = %+v", session)
+	}
+
+	status, err := client.GetCheckoutStatus(ctx, *session.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "/agent/checkout-session/" + *session.SessionID; r.call(t, 2).url != want {
+		t.Fatalf("status read %s, want %s", r.call(t, 2).url, want)
+	}
+	if status.SessionID != *session.SessionID || !status.QuoteReused {
+		t.Fatalf("status = %+v", status)
+	}
+	if r.count() != 3 {
+		t.Fatalf("calls = %d, want one quote, one session, one status read", r.count())
 	}
 }
 
@@ -702,11 +824,22 @@ func TestRetries(t *testing.T) {
 		}
 	})
 
-	t.Run("a cancelled context stops the retry loop", func(t *testing.T) {
+	t.Run("a 5xx that carries a rate-limit code is not retried", func(t *testing.T) {
+		r.reply(answer{status: 503, body: map[string]any{"error": "rate_limited", "message": "Too many requests."}})
+		_, err := r.client().Status(ctx)
+		if !IsRateLimited(err) {
+			t.Fatalf("err = %v", err)
+		}
+		if r.count() != 1 {
+			t.Fatalf("calls = %d; a rate limit is never retried, whatever its status", r.count())
+		}
+	})
+
+	t.Run("a canceled context stops the retry loop", func(t *testing.T) {
 		r.reply(answer{status: 503, body: map[string]any{"error": "upstream_unavailable"}})
-		cancelled, cancel := context.WithCancel(ctx)
+		canceled, cancel := context.WithCancel(ctx)
 		cancel()
-		_, err := r.client().Status(cancelled)
+		_, err := r.client().Status(canceled)
 		if err == nil || !errors.Is(err, context.Canceled) {
 			t.Fatalf("err = %v, want a context.Canceled wrapper", err)
 		}
@@ -756,6 +889,17 @@ func TestNetwork(t *testing.T) {
 		}
 		if elapsed := time.Since(started); elapsed < 500*time.Millisecond {
 			t.Fatalf("elapsed %s; two backoffs (200 ms + 400 ms) separate the three attempts", elapsed)
+		}
+	})
+
+	t.Run("WithTimeout(0) turns the per-attempt deadline off instead of failing at once", func(t *testing.T) {
+		r.reply(answer{status: 200, body: f.livenessOK})
+		liveness, err := r.client(WithTimeout(0)).Status(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !liveness.Ok || r.count() != 1 {
+			t.Fatalf("ok=%v calls=%d", liveness.Ok, r.count())
 		}
 	})
 
@@ -816,7 +960,9 @@ func TestValidation(t *testing.T) {
 		{"country outside the five sold", quoteWith(func(q *QuoteRequest) { q.ToCountryCode = "FR" }), "to_country_code must be one of US, CA, GB, DE, AU"},
 		{"negative quantity", quoteWith(func(q *QuoteRequest) { q.Quantity = -1 }), "quantity must be 1 or more"},
 		{"three of the four measurements", measuredWith(func(q *QuoteRequest) { q.WeightKg = 0 }), "go together; missing weight_kg"},
-		{"a negative measurement", measuredWith(func(q *QuoteRequest) { q.HeightCm = -1 }), "height_cm must be a positive number"},
+		{"a negative measurement", measuredWith(func(q *QuoteRequest) { q.HeightCm = -1 }), "height_cm must be between 1 and 300, got -1"},
+		{"a side under the schema's 1 cm", measuredWith(func(q *QuoteRequest) { q.LengthCm = 0.5 }), "length_cm must be between 1 and 300, got 0.5"},
+		{"a weight past the schema's 1000 kg", measuredWith(func(q *QuoteRequest) { q.WeightKg = 1200 }), "weight_kg must be between 0.1 and 1000, got 1200"},
 		{"neither product nor product_url", quoteWith(func(q *QuoteRequest) { q.Product = "" }), "required: product"},
 		{"missing to_postal_code", quoteWith(func(q *QuoteRequest) { q.ToPostalCode = "" }), "to_postal_code"},
 		{"session: 4-digit from_zip", sessionWith(func(s *CheckoutSessionRequest) { s.FromZip = "0710" }), "from_zip must be a 5-digit US ZIP"},
@@ -825,7 +971,7 @@ func TestValidation(t *testing.T) {
 			return err
 		}, "without quote_id the shipment itself is required: product"},
 		{"session: negative quantity with a quote_id", func(c *Client) error {
-			_, err := c.CreatePaymentSession(ctx, CheckoutSessionRequest{QuoteID: "q_8f3c2e1a4b7d", Quantity: -2})
+			_, err := c.CreatePaymentSession(ctx, CheckoutSessionRequest{QuoteID: quoteID, Quantity: -2})
 			return err
 		}, "quantity must be 1 or more"},
 		{"checkout status: empty id", func(c *Client) error {
@@ -871,10 +1017,10 @@ func TestValidation(t *testing.T) {
 
 	t.Run("a quote_id skips shipment validation and is sent as given", func(t *testing.T) {
 		r.reply(answer{status: 200, body: response(t, f.sessionResponses, 200, "default")})
-		if _, err := r.client().CreatePaymentSession(ctx, CheckoutSessionRequest{QuoteID: "q_8f3c2e1a4b7d"}); err != nil {
+		if _, err := r.client().CreatePaymentSession(ctx, CheckoutSessionRequest{QuoteID: quoteID}); err != nil {
 			t.Fatal(err)
 		}
-		if got, want := asMap(t, r.call(t, 0).body), map[string]any{"quote_id": "q_8f3c2e1a4b7d"}; !reflect.DeepEqual(got, want) {
+		if got, want := asMap(t, r.call(t, 0).body), map[string]any{"quote_id": quoteID}; !reflect.DeepEqual(got, want) {
 			t.Fatalf("body sent = %v", got)
 		}
 	})
@@ -890,20 +1036,4 @@ func TestValidation(t *testing.T) {
 			t.Fatalf("quantity sent = %v", got)
 		}
 	})
-}
-
-// --- Live (opt-in) ---------------------------------------------------------
-
-// Only Status: it is free and read-only. A quote costs SMKlog a carrier call.
-func TestLiveStatus(t *testing.T) {
-	if os.Getenv("SMKLOG_LIVE") != "1" {
-		t.Skip("set SMKLOG_LIVE=1 to call production")
-	}
-	liveness, err := New(WithTimeout(15 * time.Second)).Status(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !liveness.Ok || liveness.Service != "smklog-quote-api" || liveness.Version == "" {
-		t.Fatalf("liveness = %+v", liveness)
-	}
 }

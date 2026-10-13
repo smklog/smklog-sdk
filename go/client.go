@@ -62,7 +62,8 @@ func WithBaseURL(baseURL string) Option {
 }
 
 // WithTimeout bounds each attempt; the caller's context bounds the whole
-// call. The default is DefaultTimeout.
+// call. The default is DefaultTimeout. Zero or less turns the per-attempt
+// deadline off, as http.Client does, leaving the context as the only bound.
 func WithTimeout(timeout time.Duration) Option {
 	return func(c *Client) { c.timeout = timeout }
 }
@@ -112,8 +113,10 @@ func New(opts ...Option) *Client {
 func (c *Client) BaseURL() string { return c.baseURL }
 
 // GetParcelQuote prices one parcel (POST /quote). It spends a live carrier
-// rating on the server: one call per shipment, never a poll. The request is
-// checked locally first; a refusal has Status 0 and IsInvalidRequest true.
+// rating on the server: one call per shipment, never a poll. A priced answer
+// carries QuoteID, the handle CreatePaymentSession reuses for 15 minutes. The
+// request is checked locally first; a refusal has Status 0 and
+// IsInvalidRequest true.
 func (c *Client) GetParcelQuote(ctx context.Context, req QuoteRequest) (*QuoteResponse, error) {
 	if err := prepareQuote(&req); err != nil {
 		return nil, err
@@ -126,9 +129,12 @@ func (c *Client) GetParcelQuote(ctx context.Context, req QuoteRequest) (*QuoteRe
 }
 
 // CreatePaymentSession opens a checkout for a human (POST /agent/checkout-session)
-// from a QuoteID (preferred: the quote is reused, no second carrier call) or
-// from the shipment itself. Nothing is charged: the human pays on the
-// returned HandoffURL.
+// from a QuoteID (preferred: the quote's rates are reused, no second carrier
+// call) or from the shipment itself, priced live. A QuoteID older than 15
+// minutes makes the API price the shipment fields live, so send them
+// alongside an old handle when you have them. Nothing is charged: the human
+// pays on the returned HandoffURL, and SessionID (nil only when the record
+// could not be stored) is what GetCheckoutStatus reads.
 func (c *Client) CreatePaymentSession(ctx context.Context, req CheckoutSessionRequest) (*CheckoutSession, error) {
 	if err := prepareSession(&req); err != nil {
 		return nil, err
@@ -191,18 +197,23 @@ func prepareQuote(r *QuoteRequest) error {
 	}
 	// An exact box needs all four numbers; a partial set would silently fall
 	// back to the estimate and price a different parcel than the caller meant.
+	// The bounds are the schema's (quote-request.schema.json); a zero means
+	// the field was left out.
 	measurements := []struct {
-		name  string
-		value float64
-	}{{"length_cm", r.LengthCm}, {"width_cm", r.WidthCm}, {"height_cm", r.HeightCm}, {"weight_kg", r.WeightKg}}
+		name            string
+		value, min, max float64
+	}{
+		{"length_cm", r.LengthCm, 1, 300}, {"width_cm", r.WidthCm, 1, 300},
+		{"height_cm", r.HeightCm, 1, 300}, {"weight_kg", r.WeightKg, 0.1, 1000},
+	}
 	var given, absent []string
 	for _, m := range measurements {
 		if m.value == 0 {
 			absent = append(absent, m.name)
 			continue
 		}
-		if m.value < 0 {
-			return invalid(fmt.Sprintf("%s must be a positive number, got %v", m.name, m.value))
+		if m.value < m.min || m.value > m.max {
+			return invalid(fmt.Sprintf("%s must be between %v and %v, got %v", m.name, m.min, m.max, m.value))
 		}
 		given = append(given, m.name)
 	}
@@ -271,7 +282,8 @@ func checkRoute(fromName, from, toName, to, countryName, country string) error {
 // --- Transport -------------------------------------------------------------
 
 // do runs one operation with the retry policy: GETs get two more attempts on
-// a network failure or a 5xx, POSTs never do. A 429 is returned at once.
+// a network failure or a 5xx, POSTs never do. A rate limit is returned at
+// once whatever its status.
 func (c *Client) do(ctx context.Context, method, path string, body any, out any) error {
 	var payload []byte
 	if body != nil {
@@ -297,9 +309,12 @@ func (c *Client) do(ctx context.Context, method, path string, body any, out any)
 	}
 }
 
+// A 5xx that carries a rate-limit code is still a rate limit: looping on it
+// would burn the bucket the API just said is empty.
 func retryable(err error) bool {
 	var apiErr *APIError
-	return errors.As(err, &apiErr) && (apiErr.Code == "network_error" || apiErr.Status >= 500)
+	return errors.As(err, &apiErr) && !errors.Is(apiErr, ErrRateLimited) &&
+		(apiErr.Code == "network_error" || apiErr.Status >= 500)
 }
 
 // send performs one attempt and turns the answer into out or an *APIError.
@@ -309,8 +324,12 @@ func (c *Client) send(ctx context.Context, method, path string, payload []byte, 
 	if payload != nil {
 		reader = bytes.NewReader(payload)
 	}
-	attemptCtx, cancel := context.WithTimeout(ctx, c.timeout)
-	defer cancel()
+	attemptCtx := ctx
+	if c.timeout > 0 {
+		var cancel context.CancelFunc
+		attemptCtx, cancel = context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+	}
 	req, err := http.NewRequestWithContext(attemptCtx, method, target, reader)
 	if err != nil {
 		return &APIError{Code: "network_error", Message: fmt.Sprintf("%s %s: %v", method, target, err), Err: err}
@@ -356,7 +375,7 @@ func (c *Client) send(ctx context.Context, method, path string, payload []byte, 
 // when the caller's own context ended, their reason is the message.
 func networkError(method, target string, cause error, ctx context.Context, timeout time.Duration) *APIError {
 	message := fmt.Sprintf("%s %s: %v", method, target, cause)
-	if errors.Is(cause, context.DeadlineExceeded) && ctx.Err() == nil {
+	if timeout > 0 && errors.Is(cause, context.DeadlineExceeded) && ctx.Err() == nil {
 		message = fmt.Sprintf("%s %s timed out after %s", method, target, timeout)
 	}
 	return &APIError{Code: "network_error", Message: message, Err: cause}

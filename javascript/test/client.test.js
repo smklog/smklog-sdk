@@ -24,6 +24,12 @@ function sample(name) {
   return JSON.parse(readFileSync(new URL(`../../testdata/samples/${name}.json`, import.meta.url), 'utf8'));
 }
 
+function schema(name) {
+  return JSON.parse(readFileSync(new URL(`../../testdata/schemas/${name}.schema.json`, import.meta.url), 'utf8'));
+}
+
+const quoteResponseSchema = schema('quote-response');
+
 const quoteRequests = sample('get-parcel-quote-request');
 const quoteResponses = sample('get-parcel-quote-responses');
 const sessionRequests = sample('create-payment-session-request');
@@ -141,6 +147,62 @@ describe('getParcelQuote', () => {
     replay.reply({ status: 200, body: { ...QUOTE_OK, added_next_year: { nested: true } } });
     const quote = await client().getParcelQuote(example(quoteRequests, 'described'));
     assert.deepEqual(quote.added_next_year, { nested: true });
+  });
+});
+
+// The priced answer carries a handle that createPaymentSession accepts for
+// 15 minutes; the vendored "fromQuote" request example passes that same
+// handle, so the two samples pin the round trip end to end.
+describe('quote_id', () => {
+  const QUOTE_ID = new RegExp(quoteResponseSchema.properties.quote_id.pattern);
+
+  test('the priced sample exposes quote_id in the shape the contract declares', async () => {
+    replay.reply({ status: 200, body: QUOTE_OK });
+    const quote = await client().getParcelQuote(example(quoteRequests, 'described'));
+    assert.equal(quote.quote_id, QUOTE_OK.quote_id);
+    assert.match(quote.quote_id, QUOTE_ID);
+    assert.equal(quote.quote_id, example(sessionRequests, 'fromQuote').quote_id, 'the samples share one handle');
+  });
+
+  test('createPaymentSession sends the answer\'s quote_id verbatim and the session reports the reuse', async () => {
+    replay.reply({ status: 200, body: QUOTE_OK });
+    const quote = await client().getParcelQuote(example(quoteRequests, 'described'));
+    assert.ok(quote.isPriced() && quote.quote_id);
+
+    const fromQuote = example(sessionRequests, 'fromQuote');
+    const expected = response(sessionResponses, 200);
+    replay.reply({ status: 200, body: expected });
+    const session = await client().createPaymentSession({ quote_id: quote.quote_id, service: fromQuote.service });
+
+    assert.equal(replay.calls.length, 1);
+    assert.equal(replay.calls[0].url, sessionRequests.path);
+    assert.deepEqual(replay.calls[0].body, fromQuote);
+    assert.equal(replay.calls[0].body.quote_id, 'q_8f3c2e1a4b7d');
+    assert.equal(replay.calls[0].body.quantity, undefined, 'no quantity default rides along with a quote_id');
+    assert.deepEqual(session, expected);
+    assert.equal(session.quote_reused, true);
+    assert.equal(session.session_id, expected.session_id);
+  });
+
+  test('a null quote_id (handle not stored) is kept as null on a still-priced answer', async () => {
+    replay.reply({ status: 200, body: { ...QUOTE_OK, quote_id: null } });
+    const quote = await client().getParcelQuote(example(quoteRequests, 'described'));
+    assert.equal(quote.quote_id, null);
+    assert.equal(quote.isPriced(), true);
+  });
+
+  test('the "notAParcel" sample carries no quote_id at all', async () => {
+    replay.reply({ status: 200, body: response(quoteResponses, 200, 'notAParcel') });
+    const quote = await client().getParcelQuote(example(quoteRequests, 'described'));
+    assert.equal('quote_id' in quote, false);
+    assert.equal(quote.quote_id, undefined);
+  });
+
+  test('shipment fields sent alongside a quote_id ride through untouched', async () => {
+    replay.reply({ status: 200, body: response(sessionResponses, 200) });
+    const shipment = example(sessionRequests, 'fromShipment');
+    await client().createPaymentSession({ quote_id: 'q_8f3c2e1a4b7d', ...shipment });
+    assert.deepEqual(replay.calls[0].body, { quote_id: 'q_8f3c2e1a4b7d', ...shipment });
   });
 });
 
@@ -287,6 +349,15 @@ describe('error mapping', () => {
     });
   }
 
+  test('a Problem without a message still says what was missing', async () => {
+    const problem = response(quoteResponses, 400);
+    assert.equal(problem.message, undefined, 'the vendored 400 sample carries no sentence');
+    replay.reply({ status: 400, body: problem });
+    const error = await client().getParcelQuote(example(quoteRequests, 'described')).catch((caught) => caught);
+    assert.ok(error instanceof InvalidRequestError);
+    assert.equal(error.message, 'missing_required_fields: missing to_postal_code');
+  });
+
   test('a code outside the table is the base SmklogError', async () => {
     replay.reply({ status: 401, body: { error: 'invalid_token', message: 'Unknown bearer.' } });
     const error = await client({ token: 'stale' }).status().catch((caught) => caught);
@@ -300,6 +371,22 @@ describe('error mapping', () => {
     const error = await client().status().catch((caught) => caught);
     assert.ok(error instanceof RateLimitedError);
     assert.equal(error.retryAfter, 120);
+    assert.equal(replay.calls.length, 1);
+  });
+
+  test('a 429 without a Problem body (edge rate limit) is still RateLimitedError, not retried', async () => {
+    replay.reply({ status: 429, body: '<html>Too many requests</html>', contentType: 'text/html' });
+    let error = await client().status().catch((caught) => caught);
+    assert.ok(error instanceof RateLimitedError, `got ${error && error.constructor.name}`);
+    assert.equal(error.error, 'rate_limited');
+    assert.equal(error.status, 429);
+    assert.equal(error.body, '<html>Too many requests</html>');
+    assert.equal(replay.calls.length, 1);
+
+    replay.reply({ status: 429, body: '', contentType: 'text/plain' });
+    error = await client().getParcelQuote(example(quoteRequests, 'described')).catch((caught) => caught);
+    assert.ok(error instanceof RateLimitedError);
+    assert.equal(error.error, 'rate_limited');
     assert.equal(replay.calls.length, 1);
   });
 
@@ -375,14 +462,49 @@ describe('network', () => {
     assert.ok(error.cause instanceof Error);
   });
 
-  test('a network failure on status() is retried before it is raised', async () => {
-    replay.reply({ status: 200, body: 'not json at all', contentType: 'text/plain' });
-    // Keep the connection refused for the first two attempts by pointing at a
-    // closed port; the retry count is what matters, not a later success.
-    const unreachable = new SmklogClient({ baseUrl: 'http://127.0.0.1:1', timeout: 1000 });
-    const started = Date.now();
-    await assert.rejects(unreachable.status(), (error) => error.error === 'network_error');
-    assert.ok(Date.now() - started >= 500, 'two backoffs (200 ms + 400 ms) separate the three attempts');
+  // A server that drops the socket mid-request stands in for a flaky network;
+  // counting the requests it saw pins the attempt count, which a timing
+  // assertion cannot (one slow retry or five fast ones would both pass).
+  async function startFlaky(failures) {
+    const seen = { requests: 0 };
+    const server = createServer((req, res) => {
+      seen.requests += 1;
+      if (seen.requests <= failures) {
+        req.socket.destroy();
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(LIVENESS_OK));
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    seen.client = new SmklogClient({ baseUrl: `http://127.0.0.1:${server.address().port}` });
+    seen.close = () => {
+      server.closeAllConnections();
+      return new Promise((resolve) => server.close(resolve));
+    };
+    return seen;
+  }
+
+  test('a network failure on status() is retried twice and the third attempt is used', async () => {
+    const flaky = await startFlaky(2);
+    try {
+      const liveness = await flaky.client.status();
+      assert.deepEqual(liveness, LIVENESS_OK);
+      assert.equal(flaky.requests, 3, 'two dropped attempts and the one that answered');
+    } finally {
+      await flaky.close();
+    }
+  });
+
+  test('a network failure on status() is raised after exactly three attempts', async () => {
+    const flaky = await startFlaky(3);
+    try {
+      await assert.rejects(flaky.client.status(), (error) => error.error === 'network_error' && error.status === 0);
+      assert.equal(flaky.requests, 3);
+    } finally {
+      await flaky.close();
+    }
   });
 
   test('a 200 that is not JSON raises invalid_response', async () => {

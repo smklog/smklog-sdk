@@ -58,14 +58,22 @@ const ERROR_CLASS_BY_CODE = {
 
 function errorFromResponse(response, problem, rawText) {
   const isProblem = problem && typeof problem === 'object' && typeof problem.error === 'string';
-  const error = isProblem ? problem.error : 'http_error';
-  const message = (isProblem && problem.message) || `HTTP ${response.status} from ${response.url}`;
-  const ErrorClass = ERROR_CLASS_BY_CODE[error] || SmklogError;
+  // An edge rate limit answers 429 with an HTML or empty body instead of the
+  // worker's Problem; it still must not be retried, so the status alone
+  // decides the class and the code when the body names none.
+  const rateLimited = response.status === 429;
+  const error = isProblem ? problem.error : rateLimited ? 'rate_limited' : 'http_error';
+  const missing = isProblem && Array.isArray(problem.missing) ? problem.missing : [];
+  // A Problem may carry no sentence (missing_required_fields lists fields
+  // instead), and a log line of error.message should still say what went wrong.
+  const message = (isProblem && problem.message)
+    || (isProblem ? `${error}${missing.length ? ': missing ' + missing.join(', ') : ''}` : `HTTP ${response.status} from ${response.url}`);
+  const ErrorClass = rateLimited ? RateLimitedError : ERROR_CLASS_BY_CODE[error] || SmklogError;
   const retryAfterHeader = Number(response.headers.get('retry-after'));
   return new ErrorClass(message, {
     status: response.status,
     error,
-    missing: isProblem ? problem.missing : [],
+    missing,
     body: isProblem ? problem : rawText,
     retryAfter: Number.isFinite(retryAfterHeader) && retryAfterHeader > 0 ? retryAfterHeader : null,
   });
@@ -183,6 +191,9 @@ export class SmklogClient {
 
   async createPaymentSession(request) {
     validateCheckoutSessionRequest(request);
+    // A quote_id names the shipment, so no quantity default is added; shipment
+    // fields sent alongside it ride through untouched for the case where the
+    // handle has expired and the API prices them live instead.
     const body = request.quote_id ? { ...request } : { quantity: 1, ...request };
     return this.#request('POST', '/agent/checkout-session', body);
   }

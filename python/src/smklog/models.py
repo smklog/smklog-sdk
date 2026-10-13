@@ -131,10 +131,17 @@ class Rate(Model):
 
 @dataclass
 class QuoteResponse(Model):
-    """A priced parcel, or the reason it was not priced (quote-response.schema.json)."""
+    """A priced parcel, or the reason it was not priced (quote-response.schema.json).
+
+    ``quote_id`` is the handle the API keeps for 15 minutes: pass it to
+    ``create_payment_session`` and the checkout reuses these rates instead of
+    spending a second carrier call. It is None when nothing was priced, when the
+    handle could not be stored, or when the answer carried no rates.
+    """
 
     mode: Optional[str] = None
     identified_product_title: Optional[str] = None
+    quote_id: Optional[str] = None
     package: Optional[Package] = None
     packages: Optional[List[Package]] = None
     rates: List[Rate] = field(default_factory=list)
@@ -149,13 +156,19 @@ class QuoteResponse(Model):
         "rates": _list_of(Rate),
     }
 
+    def __post_init__(self) -> None:
+        # A body with "rates": null is an unpriced answer, so the typed view reads
+        # as an empty list; ``raw`` still shows the null the API sent.
+        if self.rates is None:
+            self.rates = []
+
     def is_priced(self) -> bool:
         """True only when the shipment can be bought: a label-ready mode with a rate."""
         return self.mode == "parcel_label_ready" and bool(self.rates)
 
     def cheapest(self) -> Optional[Rate]:
         """The rate with the lowest checkout total; None when nothing was priced."""
-        priced = [rate for rate in self.rates if isinstance(rate, Rate) and rate.amount is not None]
+        priced = [rate for rate in self.rates or [] if isinstance(rate, Rate) and rate.amount is not None]
         return min(priced, key=lambda rate: rate.amount) if priced else None
 
 

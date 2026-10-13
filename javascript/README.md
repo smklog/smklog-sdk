@@ -16,27 +16,34 @@ npm install smklog
 ## Quickstart
 
 ```js
-import { SmklogClient, RateLimitedError } from 'smklog';
+import { SmklogClient } from 'smklog';
 
 const client = new SmklogClient();
-const quote = await client.getParcelQuote({
-  product: 'Yamaha FG800 acoustic guitar in a hard case',
-  quantity: 1, from_postal_code: '07102', to_postal_code: '30303',
-});
-if (quote.isPriced()) {
-  const best = quote.cheapest();
-  console.log(best.carrier, best.service, best.amount);          // USPS Ground Advantage 38.42
-  // The quote answer carries a quote_id for 15 minutes; reusing it spends no second carrier call.
-  const session = await client.createPaymentSession({ quote_id: quote.quote_id, service: best.service });
-  console.log(session.handoff_url);                               // the human pays here
+const product = 'Yamaha FG800 acoustic guitar in a hard case';
+const quote = await client.getParcelQuote({ product, from_postal_code: '07102', to_postal_code: '30303' });
+const best = quote.isPriced() ? quote.cheapest() : null;
+if (!best) throw new Error(`${quote.mode}: ${quote.notice}`);        // not_a_parcel, review, ...
+console.log(best.carrier, best.service, best.amount);                 // USPS Ground Advantage 38.42
+// quote_id is good for 15 minutes; a session opened with it reuses these rates, so the pair
+// costs one carrier call. It is null when the handle was not stored: then price live.
+const session = await client.createPaymentSession(quote.quote_id
+  ? { quote_id: quote.quote_id, service: best.service }
+  : { product, from_zip: '07102', to_zip: '30303', service: best.service });
+console.log(session.handoff_url, session.quote_reused);               // the human pays here; true
+if (session.session_id) {
   const status = await client.getCheckoutStatus(session.session_id);
-  console.log(status.status);                                     // awaiting_checkout … label_ready
+  console.log(status.status);                                         // awaiting_checkout ... label_ready
 }
 ```
 
+The same snippet compiles as TypeScript under `--strict`: `cheapest()` is `Rate | null`,
+`quote_id` is `string | null | undefined` and `session_id` is `string | null`, so all three are
+checked before use.
+
 Every `getParcelQuote` call spends a live carrier rating that costs SMKlog money: one call per
-shipment, cache on your side, never poll. Pass the `quote_id` to `createPaymentSession` so the
-pair costs one carrier call.
+shipment, cache on your side, never poll. Pass the answer's `quote_id` to `createPaymentSession`
+and the pair costs one carrier call; a session opened from the shipment fields alone prices the
+shipment again. Quote once, let the human settle on the parcel, then open one session.
 
 ## Operations
 
@@ -58,11 +65,19 @@ nothing and keeps fields it does not know about.
 
 `quote.rates` stays in the API's order (best value first).
 
-`createPaymentSession` takes either `{ quote_id, service? }` (preferred: no second carrier
-call) or a shipment `{ product, from_zip, to_zip, to_country?, quantity?, service? }`. The
-`quote_id` is the handle the quote answer carries for 15 minutes; the published
-`QuoteResponse` schema admits it as one of its additional fields rather than naming it, so the
-client keeps it as-is and TypeScript sees it as `unknown` (`quote.quote_id as string`).
+`createPaymentSession` takes one of two forms:
+
+- `{ quote_id, service? }` (preferred): `quote_id` is the handle a `getParcelQuote` answer carries,
+  valid 15 minutes. The session reuses that quote's rates, no second carrier call is spent, and
+  the answer says so with `quote_reused: true`. The shipment fields are ignored while the handle
+  is valid.
+- `{ product, from_zip, to_zip, to_country?, quantity?, service? }`: the shipment itself, priced
+  live when the checkout opens. `quantity` is sent as `1` when omitted.
+
+An expired `quote_id` makes the API price the shipment fields live instead, so pass them
+alongside an old id when you have them. `quote.quote_id` is `null` when nothing was priced or the
+handle could not be stored, and absent on answers without rates; the client passes a `quote_id`
+through as given and never invents one.
 
 ## Options
 
@@ -79,11 +94,13 @@ new SmklogClient({
 
 Every failure is a `SmklogError` with `status` (HTTP status, `0` when no response arrived),
 `error` (the API's stable code), `message`, `missing` (field names, may be empty) and `body`
-(the parsed `Problem`). Subclasses by code:
+(the parsed `Problem`, or the raw text when the body was not JSON). When the `Problem` carries
+no `message`, the SDK's message is the code plus the missing fields
+(`missing_required_fields: missing to_postal_code`). Subclasses by code:
 
 | `error` code | Class |
 | --- | --- |
-| `rate_limited`, `slow_down` | `RateLimitedError` (`retryAfter` seconds when the API sent the header) |
+| `rate_limited`, `slow_down`, and any other 429 (an edge rate limit without a `Problem` body reads `rate_limited`) | `RateLimitedError` (`retryAfter` seconds when the API sent the header) |
 | `product_not_recognized`, `product_url_not_detected`, `missing_required_fields`, `invalid_request`, `invalid_json` | `InvalidRequestError` |
 | `session_not_found` | `NotFoundError` |
 | `session_failed` | `SessionFailedError` |
@@ -98,6 +115,8 @@ DE, AU`, `quantity` an integer of 1 or more, and the four measurements (`length_
 `width_cm`, `height_cm`, `weight_kg`) all or none. `quantity` is sent as `1` when omitted.
 
 ```js
+import { SmklogError, RateLimitedError } from 'smklog';
+
 try {
   await client.getParcelQuote(request);
 } catch (error) {
@@ -121,7 +140,8 @@ try {
 
 `index.d.ts` declares the client, its options, every model from the published JSON Schemas
 (`QuoteRequest`, `QuoteResponse`, `Rate`, `Package`, `CheckoutSessionRequest`,
-`CheckoutSession`, `CheckoutStatus`, `Liveness`, `Problem`) and the error classes.
+`CheckoutSession`, `CheckoutStatus`, `Liveness`, `Problem`) and the error classes, `cause`
+included, so the declarations hold on any `target` and `lib`.
 
 ## Tests
 
@@ -140,4 +160,4 @@ against production; nothing in the suite ever calls `POST /quote` for real.
 - Rate limits: https://smklog.com/developers/rate-limits
 - Status: https://smklog.com/developers/status
 
-MIT © SMKLOG-2022 LLC
+MIT license; see [LICENSE](LICENSE).

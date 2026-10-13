@@ -13,7 +13,7 @@ export interface SmklogClientOptions {
   baseUrl?: string;
   /** Per-attempt timeout in milliseconds. Default 30000: a quote can take 10-20 s while carriers answer. */
   timeout?: number;
-  /** Optional OAuth bearer for a dedicated rate-limit bucket; sent as "Authorization: Bearer …" only when set. */
+  /** Optional OAuth bearer for a dedicated rate-limit bucket; sent as "Authorization: Bearer ..." only when set. */
   token?: string;
   /** Appended after the SDK's own product token: "smklog-sdk-javascript/0.1.0 <userAgent>". */
   userAgent?: string;
@@ -101,6 +101,8 @@ export interface QuoteResponseData {
   /** Only parcel_label_ready carries rates. */
   mode: QuoteMode;
   identified_product_title?: string;
+  /** Handle for createPaymentSession, valid 15 minutes; null when nothing was priced or the handle could not be stored, absent on answers without rates. */
+  quote_id?: string | null;
   package?: Package;
   /** Every box the estimate produced; one entry when the shipment is one parcel. */
   packages?: Package[];
@@ -130,7 +132,7 @@ export class QuoteResponse {
 
 /** The shipment to open a checkout for (schema CheckoutSessionRequest). */
 export interface CheckoutSessionRequest {
-  /** quote_id from a previous quote, valid 15 minutes; when given, the shipment fields are ignored. */
+  /** The quote_id a getParcelQuote answer carries, valid 15 minutes: the session reuses that quote's rates and the shipment fields are ignored. An expired handle makes the API price the shipment fields live, so send them alongside an old id when you have them. */
   quote_id?: string;
   /** Required unless quote_id is given. */
   product?: string;
@@ -230,16 +232,18 @@ export interface SmklogErrorOptions {
 export class SmklogError extends Error {
   /** HTTP status; 0 when no response arrived (network failure, timeout) or the request was rejected locally. */
   readonly status: number;
-  /** Stable code: the API's own (rate_limited, session_not_found, …), network_error, http_error, invalid_response, or invalid_request / missing_required_fields for local validation. */
+  /** Stable code: the API's own (rate_limited, session_not_found, ...), network_error, http_error, invalid_response, or invalid_request / missing_required_fields for local validation. A 429 without a Problem body reads rate_limited. */
   readonly error: string;
   /** Field names still needed; empty unless the code says otherwise. */
   readonly missing: string[];
   /** The parsed Problem, the raw body text when it was not JSON, or null. */
   readonly body: unknown;
+  /** The native error behind a network_error, else undefined. Declared here so it exists whatever lib the consumer targets. */
+  readonly cause?: unknown;
   constructor(message: string, options?: SmklogErrorOptions);
 }
 
-/** 429 rate_limited or slow_down. The SDK never retries it; the caller decides. */
+/** Every 429: rate_limited, slow_down, or an edge rate limit without a Problem body. The SDK never retries it; the caller decides. */
 export class RateLimitedError extends SmklogError {
   /** Seconds from the Retry-After header when the API sent one, else null. */
   readonly retryAfter: number | null;

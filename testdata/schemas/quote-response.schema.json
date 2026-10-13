@@ -26,6 +26,14 @@
       "type": "string",
       "description": "What the estimator understood the item to be"
     },
+    "quote_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^q_[A-Za-z0-9-]{8,80}$",
+      "description": "Handle to this quote, good for 15 minutes. Pass it to createPaymentSession as quote_id and that call reuses these rates instead of spending a second carrier call. Null when nothing was priced or the handle could not be stored; absent on answers that carry no rates."
+    },
     "package": {
       "$ref": "https://smklog.com/developers/schemas/package.schema.json"
     },

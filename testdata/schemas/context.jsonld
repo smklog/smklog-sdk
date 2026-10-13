@@ -113,6 +113,10 @@
       "@id": "smk:identified_product_title",
       "@type": "xsd:string"
     },
+    "quote_id": {
+      "@id": "smk:quote_id",
+      "@type": "xsd:string"
+    },
     "package": {
       "@id": "smk:package"
     },
@@ -147,10 +151,6 @@
     },
     "source": {
       "@id": "smk:source"
-    },
-    "quote_id": {
-      "@id": "smk:quote_id",
-      "@type": "xsd:string"
     },
     "from_zip": {
       "@id": "smk:from_zip",

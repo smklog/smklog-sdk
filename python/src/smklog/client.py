@@ -55,7 +55,8 @@ class SmklogClient:
     def create_payment_session(self, request: RequestLike = None, **fields: Any) -> CheckoutSession:
         """POST /agent/checkout-session. Give a ``quote_id`` (preferred: the quote is
         reused, no second carrier call) or the shipment itself; the SDK does not turn
-        one into the other."""
+        one into the other. A ``quote_id`` older than 15 minutes makes the API price
+        the shipment fields live, so send them along when the quote may have aged."""
         body = _prepare_session(_merge(request, fields))
         return CheckoutSession.from_dict(self._request("POST", "/agent/checkout-session", body))
 

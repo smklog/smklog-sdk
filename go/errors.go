@@ -10,8 +10,9 @@ import (
 // Sentinel errors for errors.Is. Every *APIError reports the one that matches
 // its Code, so the four Is* helpers below are the same test spelled shorter.
 var (
-	// ErrRateLimited: a 429 (rate_limited, slow_down). The hourly bucket is spent;
-	// the client never retries this, the caller decides when to come back.
+	// ErrRateLimited: the rate_limited or slow_down code, normally on a 429. The
+	// hourly bucket is spent; the client never retries this, whatever status
+	// carries it, and the caller decides when to come back.
 	ErrRateLimited = errors.New("smklog: rate limited")
 	// ErrInvalidRequest: the request cannot be served as written (missing fields,
 	// bad JSON, an item or URL the estimator could not recognize), or this client
@@ -72,7 +73,8 @@ func (e *APIError) Unwrap() error { return e.Err }
 // Is matches the sentinel that classifies this error's Code.
 func (e *APIError) Is(target error) bool { return target != nil && target == sentinelFor(e.Code) }
 
-// The classification shared by every SMKlog SDK (docs/DESIGN.md, "Errors").
+// sentinelFor maps an error code to the sentinel that classifies it; the
+// table is the same in every SMKlog SDK.
 func sentinelFor(code string) error {
 	switch code {
 	case "rate_limited", "slow_down":
@@ -89,7 +91,8 @@ func sentinelFor(code string) error {
 	return nil
 }
 
-// IsRateLimited reports whether err is a 429 (rate_limited or slow_down).
+// IsRateLimited reports whether err carries the rate_limited or slow_down
+// code (normally a 429).
 func IsRateLimited(err error) bool { return errors.Is(err, ErrRateLimited) }
 
 // IsInvalidRequest reports whether err is a request the API, or this client

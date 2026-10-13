@@ -1,10 +1,13 @@
-"""The ``smklog`` command line (docs/DESIGN.md, "CLI (Python)").
+"""The ``smklog`` command line: one subcommand per API operation.
 
     smklog quote "Yamaha FG800 acoustic guitar in a hard case" 07102 30303 [--country US] [--qty 1]
                  [--dims 112x48x20 --kg 6.4] [--json]
     smklog session --quote-id q_... [--service "USPS Ground Advantage"] [--json]
     smklog session-status as_... [--json]
     smklog status [--json]
+
+Human output is a small table; ``--json`` prints the raw answer. A priced quote also
+prints its quote_id on its own line, ready for ``smklog session --quote-id``.
 
 Exit codes: 0 for a priced answer or a successful read, 2 when the API refuses (the
 Problem is printed) or answers a quote without a price, 3 on a rate limit, 1 when the
@@ -66,7 +69,7 @@ def build_parser() -> argparse.ArgumentParser:
     quote.set_defaults(run=_cmd_quote)
 
     session = commands.add_parser("session", parents=[common], help="open a checkout for a human from a quote")
-    session.add_argument("--quote-id", required=True, help="quote_id from a quote, valid 15 minutes")
+    session.add_argument("--quote-id", required=True, help="quote_id printed by `smklog quote`, valid 15 minutes")
     session.add_argument("--service", help='anchor the amount to a service, e.g. "USPS Ground Advantage"')
     session.set_defaults(run=_cmd_session)
 
@@ -147,11 +150,14 @@ def _print_quote(quote: QuoteResponse) -> None:
             _num(box.length_cm), _num(box.width_cm), _num(box.height_cm), _num(box.weight_kg), origin))
     if not quote.is_priced():
         print("No price: %s. %s" % (quote.mode, quote.notice or "The service did not price this shipment."))
-        return
-    rows = [("Carrier", "Service", "Checkout", "Counter", "Delivery")]
-    for rate in quote.rates:
-        rows.append((rate.carrier or "", rate.service or "", _money(rate.amount), _money(rate.retail_amount), _delivery(rate)))
-    _print_table(rows)
+    else:
+        rows = [("Carrier", "Service", "Checkout", "Counter", "Delivery")]
+        for rate in quote.rates:
+            rows.append((rate.carrier or "", rate.service or "", _money(rate.amount), _money(rate.retail_amount), _delivery(rate)))
+        _print_table(rows)
+    if quote.quote_id:
+        # On its own line so it can be copied straight into `smklog session --quote-id`.
+        print("quote_id  %s" % quote.quote_id)
 
 
 def _print_session(session: CheckoutSession) -> None:

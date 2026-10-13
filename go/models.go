@@ -11,8 +11,10 @@ import (
 // (parse with time.Parse(time.RFC3339, ...)); money is a float64 in USD.
 //
 // The API adds fields without a version bump, so every response struct keeps
-// what it does not name in Extra, and marshals it back out. Fields the schema
-// marks nullable are pointers (nil is the API's null).
+// what it does not name in Extra, and marshals it back out: every value the
+// API sent comes back out, while a field the API left out re-encodes as its
+// Go zero value (null, 0, false). Fields the schema marks nullable are
+// pointers (nil is the API's null).
 
 // Values of QuoteResponse.Mode. Only ModeParcelLabelReady carries rates.
 const (
@@ -97,9 +99,15 @@ type QuoteSourcePage struct {
 
 // QuoteResponse is a priced parcel, or the reason it was not priced
 // (quote-response.schema.json). Rates stay in the API's order, best value first.
+// QuoteID is the handle a priced answer carries for 15 minutes: pass it to
+// CreatePaymentSession and the session reuses these rates instead of spending
+// a second carrier call. It is nil when the API sent null (nothing was priced,
+// or the handle could not be stored) or left the field out (answers without
+// rates); nil re-encodes as null.
 type QuoteResponse struct {
 	Mode                   string                     `json:"mode"`
 	IdentifiedProductTitle string                     `json:"identified_product_title,omitempty"`
+	QuoteID                *string                    `json:"quote_id"`
 	Package                *Package                   `json:"package,omitempty"`
 	Packages               []Package                  `json:"packages,omitempty"`
 	Rates                  []Rate                     `json:"rates"`
@@ -128,22 +136,16 @@ func (q *QuoteResponse) Cheapest() *Rate {
 	return best
 }
 
-// QuoteID is the handle a priced answer carries for 15 minutes; pass it to
-// CreatePaymentSession to reuse the quote without a second carrier call. The
-// published schema admits it as an additional field rather than naming it, so
-// it is read from Extra; empty when absent.
-func (q *QuoteResponse) QuoteID() string {
-	var id string
-	if raw, ok := q.Extra["quote_id"]; ok {
-		_ = json.Unmarshal(raw, &id)
-	}
-	return id
-}
-
-// CheckoutSessionRequest is what to open a checkout for: a QuoteID from a
-// previous quote (preferred, no second carrier call) or the shipment itself
-// (checkout-session-request.schema.json). The client does not turn one into
-// the other. Without a QuoteID, Quantity 0 is sent as 1.
+// CheckoutSessionRequest is what to open a checkout for
+// (checkout-session-request.schema.json): the QuoteID a quote answer carries
+// (preferred: the session reuses that quote's rates, no second carrier call)
+// or the shipment itself, priced live. The client does not turn one into the
+// other. With a QuoteID the shipment fields are optional and ignored while
+// the handle is valid; a handle older than 15 minutes makes the API price
+// them live instead, so send them alongside an old handle when you have
+// them. Without a QuoteID they are required and Quantity 0 is sent as 1.
+// Service is optional in both forms: a case-insensitive fragment of the
+// display name that anchors the amount, cheapest when omitted or unmatched.
 type CheckoutSessionRequest struct {
 	QuoteID   string `json:"quote_id,omitempty"`
 	Service   string `json:"service,omitempty"`
@@ -156,10 +158,11 @@ type CheckoutSessionRequest struct {
 
 // CheckoutSession is a payment session, not a charge (checkout-session.schema.json):
 // a live-quoted amount and the handoff URL where the human pays. SessionID is
-// empty only when the session record could not be stored.
+// nil only when the session record could not be stored; there is then nothing
+// to poll, and the human still pays on HandoffURL.
 type CheckoutSession struct {
 	Intent                 string                     `json:"intent"`
-	SessionID              string                     `json:"session_id,omitempty"`
+	SessionID              *string                    `json:"session_id"`
 	Method                 []string                   `json:"method,omitempty"`
 	Amount                 float64                    `json:"amount"`
 	Currency               string                     `json:"currency"`
@@ -324,8 +327,8 @@ func decodeExtra(b []byte, dst any, extra *map[string]json.RawMessage) error {
 	return nil
 }
 
-// encodeExtra marshals v and merges extra back in, so a decoded answer
-// re-encodes to what the API sent. A named field always wins over an extra.
+// encodeExtra marshals v and merges extra back in, so nothing the API sent is
+// lost on re-encoding. A named field always wins over an extra.
 func encodeExtra(v any, extra map[string]json.RawMessage) ([]byte, error) {
 	known, err := json.Marshal(v)
 	if err != nil || len(extra) == 0 {

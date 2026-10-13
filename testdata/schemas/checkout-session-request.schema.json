@@ -7,7 +7,7 @@
   "properties": {
     "quote_id": {
       "type": "string",
-      "description": "quote_id from a previous get_parcel_quote call, valid 15 minutes. When given, the shipment comes from that quote and product, from_zip, to_zip, to_country and quantity are ignored."
+      "description": "The quote_id a getParcelQuote answer carries (the get_parcel_quote tool returns the same handle), valid 15 minutes. When given, the shipment comes from that quote and product, from_zip, to_zip, to_country and quantity are ignored; an expired handle prices the fields live."
     },
     "product": {
       "type": "string",

@@ -1,4 +1,4 @@
-"""The error taxonomy shared by every SMKlog SDK (docs/DESIGN.md, "Errors")."""
+"""The error taxonomy: one base exception and four subclasses picked by the Problem code."""
 
 from typing import Any, Dict, Optional, Sequence, Type
 
@@ -27,6 +27,12 @@ class SmklogError(Exception):
         self.missing = [str(name) for name in (missing or [])]
         self.body = body
         super().__init__(str(self))
+
+    def __reduce__(self):
+        # Exception's default pickling replays ``args`` (the rendered text) into
+        # __init__, which wants the five fields; rebuild from them instead so an
+        # error crosses a multiprocessing boundary intact.
+        return (type(self), (self.status, self.error, self.message, self.missing, self.body))
 
     def __str__(self) -> str:
         text = self.error
@@ -83,16 +89,24 @@ def error_for(status: int, body: Any) -> SmklogError:
     """Builds the error for a non-2xx answer; the Problem's code picks the type.
 
     A 429 without a Problem body (an edge rate limit answers in HTML) still becomes a
-    RateLimitedError, because the caller's reaction is the same either way.
+    RateLimitedError, because the caller's reaction is the same either way. A Problem
+    may carry no sentence (missing_required_fields lists fields instead), so the
+    message is then the code plus the missing fields and a log line still says what
+    went wrong.
     """
     problem = body if isinstance(body, dict) else {}
     code = problem.get("error")
     if not isinstance(code, str) or not code:
         code = "rate_limited" if status == 429 else "unexpected_response"
+    missing = problem.get("missing")
+    if not isinstance(missing, list):
+        missing = None
     message = problem.get("message")
     if not isinstance(message, str) or not message:
-        message = "HTTP %d" % status if problem else "HTTP %d with a non-JSON body" % status
-    missing = problem.get("missing")
-    return ERROR_TYPES.get(code, SmklogError)(
-        status, code, message, missing if isinstance(missing, list) else None, body
-    )
+        if not problem:
+            message = "HTTP %d with a non-JSON body" % status
+        elif missing:
+            message = "%s: missing %s" % (code, ", ".join(str(name) for name in missing))
+        else:
+            message = code
+    return ERROR_TYPES.get(code, SmklogError)(status, code, message, missing, body)

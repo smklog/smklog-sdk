@@ -46,6 +46,8 @@ class QuoteCommandTests(CliCase):
         self.assertRegex(lines[2], r"^Carrier\s+Service\s+Checkout\s+Counter\s+Delivery$")
         self.assertRegex(lines[3], r"^USPS\s+Ground Advantage\s+\$38\.42\s+\$46\.95\s+2-5 business days$")
         self.assertRegex(lines[4], r"^UPS\s+Ground\s+\$41\.10\s+\$67\.35\s+3 days, by 2026-10-16$")
+        self.assertEqual(lines[5], "quote_id  q_8f3c2e1a4b7d", "on its own line, ready for `smklog session --quote-id`")
+        self.assertEqual(len(lines), 6)
         self.assertEqual(err, "")
 
     def test_json_output_is_the_raw_answer(self) -> None:
@@ -90,6 +92,7 @@ class QuoteCommandTests(CliCase):
         self.assertEqual(code, 2)
         self.assertIn("No price: not_a_parcel.", out)
         self.assertIn(answer["notice"], out)
+        self.assertNotIn("quote_id", out, "an unpriced answer has no handle to print")
 
     def test_api_refusal_prints_the_problem_and_exits_2(self) -> None:
         self.server.expect("POST", "/quote", 400, response_example("get-parcel-quote-responses", 400))
@@ -98,7 +101,9 @@ class QuoteCommandTests(CliCase):
 
         self.assertEqual(code, 2)
         self.assertEqual(out, "")
-        self.assertIn("error: missing_required_fields (HTTP 400)", err)
+        # The sample 400 carries no message, so the line names the code and the fields.
+        self.assertIn("error: missing_required_fields (HTTP 400): missing_required_fields: missing to_postal_code", err)
+        self.assertNotIn("HTTP 400: HTTP 400", err)
         self.assertIn("missing: to_postal_code", err)
 
     def test_api_refusal_with_json_prints_the_problem_as_json(self) -> None:

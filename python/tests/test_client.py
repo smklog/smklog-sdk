@@ -1,5 +1,7 @@
-"""The client against a local replay of testdata/samples (DESIGN.md, "Tests", item 1)."""
+"""The client against a local replay of testdata/samples: each example round-trips over a
+real socket, each documented error maps to its type, and retries happen only where allowed."""
 
+import pickle
 import unittest
 from unittest import mock
 
@@ -23,6 +25,7 @@ from smklog import (
     SmklogError,
 )
 from smklog import client as client_module
+from smklog.errors import error_for
 
 SESSION_ID = "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33"
 STATUS_PATH = "/agent/checkout-session/" + SESSION_ID
@@ -58,6 +61,7 @@ class GetParcelQuoteTests(ReplayCase):
         self.assertIsInstance(quote, QuoteResponse)
         self.assertEqual(quote.mode, "parcel_label_ready")
         self.assertTrue(quote.is_priced())
+        self.assertEqual(quote.quote_id, "q_8f3c2e1a4b7d", "the handle create_payment_session takes")
         self.assertEqual(quote.identified_product_title, answer["identified_product_title"])
         self.assertEqual(quote.package.length_cm, 112)
         self.assertEqual(quote.package.confidence, "medium")
@@ -103,24 +107,40 @@ class GetParcelQuoteTests(ReplayCase):
         self.assertEqual(quote.mode, "not_a_parcel")
         self.assertFalse(quote.is_priced())
         self.assertIsNone(quote.cheapest())
+        self.assertIsNone(quote.quote_id, "an answer without rates carries no handle")
         self.assertEqual(quote.rates, [])
         self.assertEqual(quote.notice, answer["notice"])
 
+    def test_null_rates_read_as_no_rates(self) -> None:
+        answer = {"mode": "parcel_rates_unavailable", "quote_id": None, "rates": None,
+                  "notice": "No carrier answered."}
+        self.server.expect("POST", "/quote", 200, answer)
+
+        quote = self.client.get_parcel_quote(**request_example("get-parcel-quote-request", "described"))
+
+        self.assertFalse(quote.is_priced())
+        self.assertIsNone(quote.cheapest())
+        self.assertEqual(quote.rates, [])
+        self.assertIsNone(quote.quote_id)
+        self.assertIsNone(quote.raw["rates"], "raw keeps the null the API sent")
+
     def test_unknown_fields_are_kept_in_extra(self) -> None:
         answer = response_example("get-parcel-quote-responses", 200, "priced")
-        answer["quote_id"] = "q_8f3c2e1a4b7d"
+        answer["carrier_notes"] = ["USPS peak season"]
         answer["rates"][0]["surcharge_note"] = "peak season"
         self.server.expect("POST", "/quote", 200, answer)
 
         quote = self.client.get_parcel_quote(**request_example("get-parcel-quote-request", "described"))
 
-        self.assertEqual(quote.extra, {"quote_id": "q_8f3c2e1a4b7d"})
+        self.assertEqual(quote.extra, {"carrier_notes": ["USPS peak season"]})
+        self.assertEqual(quote.to_dict()["carrier_notes"], ["USPS peak season"])
         self.assertEqual(quote.rates[0].extra, {"surcharge_note": "peak season"})
         self.assertEqual(quote.rates[0].to_dict()["surcharge_note"], "peak season")
         self.assertEqual(quote.raw, answer)
 
     def test_400_missing_required_fields_is_invalid_request(self) -> None:
         answer = response_example("get-parcel-quote-responses", 400)
+        self.assertNotIn("message", answer, "the sample 400 carries no sentence, only the field list")
         self.server.expect("POST", "/quote", 400, answer)
 
         with self.assertRaises(InvalidRequestError) as caught:
@@ -129,6 +149,7 @@ class GetParcelQuoteTests(ReplayCase):
         self.assertEqual(caught.exception.status, 400)
         self.assertEqual(caught.exception.error, "missing_required_fields")
         self.assertEqual(caught.exception.missing, ["to_postal_code"])
+        self.assertEqual(caught.exception.message, "missing_required_fields: missing to_postal_code")
         self.assertEqual(caught.exception.body, answer)
 
     def test_422_product_url_not_detected_is_invalid_request(self) -> None:
@@ -398,6 +419,27 @@ class ErrorTextTests(unittest.TestCase):
 
     def test_network_error_has_no_status(self) -> None:
         self.assertEqual(str(SmklogError(0, "network_error", "timed out")), "network_error: timed out")
+
+    def test_problem_without_a_message_names_the_code_and_the_fields(self) -> None:
+        exc = error_for(400, {"error": "missing_required_fields", "missing": ["to_postal_code", "product"]})
+        self.assertEqual(exc.message, "missing_required_fields: missing to_postal_code, product")
+        self.assertEqual(error_for(422, {"error": "session_failed"}).message, "session_failed")
+        self.assertEqual(error_for(502, "<html>bad gateway</html>").message, "HTTP 502 with a non-JSON body")
+
+    def test_errors_survive_pickling(self) -> None:
+        body = {"error": "missing_required_fields", "missing": ["to_postal_code"]}
+        original = error_for(400, body)
+
+        copy = pickle.loads(pickle.dumps(original))
+
+        self.assertIs(type(copy), InvalidRequestError)
+        self.assertEqual((copy.status, copy.error, copy.message, copy.missing, copy.body),
+                         (400, "missing_required_fields", original.message, ["to_postal_code"], body))
+        self.assertEqual(str(copy), str(original))
+        self.assertEqual(copy.args, original.args)
+        network = pickle.loads(pickle.dumps(SmklogError(0, "network_error", "timed out")))
+        self.assertEqual((type(network), network.status, network.error, str(network)),
+                         (SmklogError, 0, "network_error", "network_error: timed out"))
 
 
 if __name__ == "__main__":

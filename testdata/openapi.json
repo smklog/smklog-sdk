@@ -109,6 +109,7 @@
           "value": {
            "mode": "parcel_label_ready",
            "identified_product_title": "Yamaha FG800 acoustic guitar in a hard case",
+           "quote_id": "q_8f3c2e1a4b7d",
            "package": {
             "quantity": 1,
             "length_cm": 112,
@@ -695,6 +696,14 @@
       "type": "string",
       "description": "What the estimator understood the item to be"
      },
+     "quote_id": {
+      "type": [
+       "string",
+       "null"
+      ],
+      "pattern": "^q_[A-Za-z0-9-]{8,80}$",
+      "description": "Handle to this quote, good for 15 minutes. Pass it to createPaymentSession as quote_id and that call reuses these rates instead of spending a second carrier call. Null when nothing was priced or the handle could not be stored; absent on answers that carry no rates."
+     },
      "package": {
       "$ref": "#/components/schemas/Package"
      },
@@ -768,7 +777,7 @@
     "properties": {
      "quote_id": {
       "type": "string",
-      "description": "quote_id from a previous get_parcel_quote call, valid 15 minutes. When given, the shipment comes from that quote and product, from_zip, to_zip, to_country and quantity are ignored."
+      "description": "The quote_id a getParcelQuote answer carries (the get_parcel_quote tool returns the same handle), valid 15 minutes. When given, the shipment comes from that quote and product, from_zip, to_zip, to_country and quantity are ignored; an expired handle prices the fields live."
      },
      "product": {
       "type": "string",

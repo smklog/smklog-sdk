@@ -18,6 +18,8 @@ import smklog "github.com/smklog/smklog-sdk/go"
 
 ## Quickstart
 
+One carrier call prices the parcel; the session reuses it through `QuoteID`:
+
 ```go
 client := smklog.New()
 quote, err := client.GetParcelQuote(ctx, smklog.QuoteRequest{
@@ -28,28 +30,31 @@ quote, err := client.GetParcelQuote(ctx, smklog.QuoteRequest{
 if err != nil {
 	return err
 }
-if quote.IsPriced() {
+if quote.IsPriced() && quote.QuoteID != nil {
 	best := quote.Cheapest()
 	fmt.Println(best.Carrier, best.Service, best.Amount)          // USPS Ground Advantage 38.42
-	// The quote answer carries a quote_id for 15 minutes; reusing it spends no second carrier call.
+	// QuoteID is good for 15 minutes; a session opened with it reuses these rates.
 	session, err := client.CreatePaymentSession(ctx, smklog.CheckoutSessionRequest{
-		QuoteID: quote.QuoteID(), Service: best.Service,
+		QuoteID: *quote.QuoteID, Service: best.Service,
 	})
 	if err != nil {
 		return err
 	}
 	fmt.Println(session.HandoffURL)                               // the human pays here
-	status, err := client.GetCheckoutStatus(ctx, session.SessionID)
+	if session.SessionID == nil {                                 // nil only when the record was not stored
+		return errors.New("session not stored; nothing to poll")
+	}
+	status, err := client.GetCheckoutStatus(ctx, *session.SessionID)
 	if err != nil {
 		return err
 	}
-	fmt.Println(status.Status)                                    // awaiting_checkout … label_ready
+	fmt.Println(status.Status)                                    // awaiting_checkout ... label_ready
 }
 ```
 
 Every `GetParcelQuote` call spends a live carrier rating that costs SMKlog money: one call per
-shipment, cache on your side, never poll. Pass the `QuoteID` to `CreatePaymentSession` so the
-pair costs one carrier call.
+shipment, cache on your side, never poll. A priced answer carries `QuoteID`; pass it to
+`CreatePaymentSession` so the pair costs one carrier call.
 
 ## Operations
 
@@ -65,28 +70,42 @@ timeout bounds each attempt.
 
 Field names are `snake_case` on the wire exactly as the API sends and receives them; the
 structs add exported Go names and json tags, nothing else. Fields the API adds later are kept
-in each response struct's `Extra` map and marshal back out, so a decoded answer re-encodes to
-what the API sent.
+in each response struct's `Extra` map and marshal back out, so every value the API sent comes
+back out of a decoded answer; a field the API left out re-encodes as its Go zero value (`null`,
+`0`, `false`). Fields the schema marks nullable are pointers (`nil` is the API's `null`), among
+them `QuoteResponse.QuoteID` and `CheckoutSession.SessionID`.
 
-`QuoteResponse` has three helpers:
+`QuoteResponse` has two helpers and one handle:
 
 - `Cheapest()`: the rate with the lowest `Amount`, or `nil` when there are none.
 - `IsPriced()`: `true` when `Mode` is `parcel_label_ready` and at least one rate came back.
-- `QuoteID()`: the handle the quote answer carries for 15 minutes (read from `Extra`, since
-  the published schema admits it as an additional field rather than naming it).
+- `QuoteID` (`*string`): the handle a priced answer carries for 15 minutes. It is `nil` when the
+  API sent `null` (nothing was priced, or the handle could not be stored) or left the field out
+  (answers without rates), so check it before dereferencing; `nil` re-encodes as `null`.
 
 `Rates` stays in the API's order (best value first).
 
-`CreatePaymentSession` takes either `QuoteID` (preferred: no second carrier call) or the
-shipment itself (`Product`, `FromZip`, `ToZip`, optional `ToCountry` and `Quantity`). The
-client does not turn one into the other.
+`CreatePaymentSession` takes one of two forms of `CheckoutSessionRequest`, and the client does
+not turn one into the other:
+
+- `{QuoteID: *quote.QuoteID, Service: best.Service}` (preferred): the session reuses that
+  quote's rates and spends no second carrier call; `QuoteReused` comes back `true`. The shipment
+  fields are optional here and ignored while the handle is valid, and `Quantity` is not
+  defaulted: the quote names the shipment.
+- `{Product, FromZip, ToZip, ToCountry, Quantity}`: the shipment itself, priced live inside the
+  call (one carrier call). `Product`, `FromZip` and `ToZip` are required and checked locally like
+  a quote request; `Quantity` `0` is sent as `1`.
+
+`Service` is optional in both: a case-insensitive fragment of the display name that anchors the
+amount, cheapest when omitted or unmatched. A `QuoteID` older than 15 minutes makes the API
+price the shipment fields live instead, so send them alongside an old handle when you have them.
 
 ## Options
 
 ```go
 smklog.New(
 	smklog.WithBaseURL("https://quote-api.smklog.com"), // default
-	smklog.WithTimeout(30*time.Second),                 // per attempt; a quote can take 10-20 s
+	smklog.WithTimeout(30*time.Second),                 // per attempt; a quote can take 10-20 s; 0 turns it off
 	smklog.WithToken("..."),                            // OAuth bearer for a dedicated rate-limit bucket
 	smklog.WithUserAgent("my-app/2.0"),                 // appended after smklog-sdk-go/0.1.0
 	smklog.WithHTTPClient(&http.Client{}),              // your own transport (proxy, TLS)
@@ -115,7 +134,8 @@ The transport error behind a `network_error` is wrapped, so
 Local validation runs before any request and returns an `*APIError` with `Status` `0` for
 which `IsInvalidRequest` is true: a 5-digit US origin ZIP (and destination ZIP on US lanes),
 `ToCountryCode` in `US, CA, GB, DE, AU`, `Quantity` of 1 or more, and the four measurements
-(`LengthCm`, `WidthCm`, `HeightCm`, `WeightKg`) all or none. `Quantity` `0` is sent as `1`.
+(`LengthCm`, `WidthCm`, `HeightCm`, `WeightKg`) all or none and within the schema's bounds
+(1-300 cm, 0.1-1000 kg). `Quantity` `0` is sent as `1`.
 
 ```go
 quote, err := client.GetParcelQuote(ctx, req)
@@ -135,13 +155,14 @@ default:
 
 ### Retries and rate limits
 
-- **A 429 is never retried.** The buckets are hourly (about 80 quotes, 60 status reads, 20
-  token requests per client); a retry loop only burns the bucket faster. The caller decides.
+- **A rate limit is never retried**, whatever status carries it. The buckets are hourly (about
+  80 quotes, 60 status reads, 20 token requests per client); a retry loop only burns the bucket
+  faster. The caller decides.
 - `GetCheckoutStatus` and `Status` are retried at most twice, with a short backoff, on
   network failures and 5xx answers.
 - `GetParcelQuote` and `CreatePaymentSession` are never retried automatically: a quote spends
   a live carrier rating, a session opens a checkout.
-- A cancelled context stops the loop at once.
+- A canceled context stops the loop at once.
 
 ## Tests
 
@@ -160,4 +181,4 @@ against production; nothing in the suite ever calls `POST /quote` for real.
 - Rate limits: https://smklog.com/developers/rate-limits
 - Status: https://smklog.com/developers/status
 
-MIT © SMKLOG-2022 LLC
+MIT license; see [LICENSE](LICENSE).
