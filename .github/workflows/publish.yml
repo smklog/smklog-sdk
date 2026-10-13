@@ -2,11 +2,8 @@
 # (v0.1.0, v0.2.0, …). Go needs no registry: `go get` reads the tag go/v0.1.0
 # straight from this repository.
 #
-# No long-lived secrets. Both registries trust this workflow through OpenID
-# Connect ("trusted publishing"): npm is told that smklog-sdk/publish.yml may
-# publish the package `smklog`, PyPI that it may publish `smklog-sdk`. Until that
-# trust is configured on each registry, the job fails at the publish step and
-# nothing else happens.
+# Credentials live in the repository's Actions secrets (NPM_TOKEN, PYPI_TOKEN),
+# never in the tree. Both jobs run the tests again before publishing.
 name: Publish
 
 on:
@@ -30,10 +27,11 @@ jobs:
         working-directory: javascript
       - run: npm publish --provenance --access public
         working-directory: javascript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   pypi:
     runs-on: ubuntu-latest
-    environment: pypi
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -46,3 +44,4 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: python/dist
+          password: ${{ secrets.PYPI_TOKEN }}
