@@ -152,6 +152,10 @@
     "source": {
       "@id": "smk:source"
     },
+    "external_id": {
+      "@id": "smk:external_id",
+      "@type": "xsd:string"
+    },
     "from_zip": {
       "@id": "smk:from_zip",
       "@type": "xsd:string"
@@ -171,6 +175,10 @@
     "session_id": {
       "@id": "smk:session_id",
       "@type": "xsd:string"
+    },
+    "created": {
+      "@id": "smk:created",
+      "@type": "xsd:boolean"
     },
     "method": {
       "@id": "smk:method",
@@ -279,6 +287,6 @@
   },
   "x-summary": {
     "classes": 9,
-    "properties": 65
+    "properties": 67
   }
 }

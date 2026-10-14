@@ -145,6 +145,8 @@ export interface CheckoutSessionRequest {
   quantity?: number;
   /** Service to anchor the amount to, matched as a case-insensitive fragment; cheapest when omitted. */
   service?: string;
+  /** Your own key for the session (an order or cart id): the call creates the session if none exists for it and re-prices it in place if one does. Needs a client token; without one the API answers 401 token_required. */
+  external_id?: string;
 }
 
 /** A payment session, not a charge (schema CheckoutSession). */
@@ -152,6 +154,8 @@ export interface CheckoutSession {
   intent: 'session';
   /** Handle for getCheckoutStatus, good for 30 days; null only when the session record could not be stored. */
   session_id?: string | null;
+  /** Which branch ran: true when this call created the session, false when it updated the one stored under your external_id. Absent only when session_id is null. */
+  created?: boolean;
   method?: string[];
   /** Live-quoted checkout total for the anchored service, USD. */
   amount: number;
@@ -163,6 +167,8 @@ export interface CheckoutSession {
   /** True when the amount came from a quote_id, so no carrier call was spent. */
   quote_reused?: boolean;
   note?: string;
+  /** The external_id you sent, echoed back. */
+  external_id?: string;
 }
 
 /** The checkout a human started, nested in CheckoutStatus. */
@@ -218,6 +224,10 @@ export interface Problem {
   message?: string;
   /** Field names still needed. */
   missing?: string[];
+  /** With session_in_checkout: the session stored under your external_id, whose checkout the human has started. */
+  session_id?: string;
+  /** With session_in_checkout: the external_id you sent. */
+  external_id?: string;
 }
 
 export interface SmklogErrorOptions {

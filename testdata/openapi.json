@@ -237,8 +237,8 @@
     "tags": [
      "checkout"
     ],
-    "summary": "Create a payment session for one parcel label (MPP intent \"session\")",
-    "description": "Prices the shipment live, anchors the amount to one service, and returns a handoff URL opening the SMKlog checkout prefilled with the shipment. The human confirms the contents certification and the carrier-adjustment consent there and pays on Stripe hosted checkout. This operation never charges: the agent prepares, the human pays. Pass the quote_id from getParcelQuote and the session reuses that quote instead of spending a second carrier call.",
+    "summary": "Create or update (upsert) a payment session for one parcel label (MPP intent \"session\")",
+    "description": "Prices the shipment live, anchors the amount to one service, and returns a handoff URL opening the SMKlog checkout prefilled with the shipment. The human confirms the contents certification and the carrier-adjustment consent there and pays on Stripe hosted checkout. This operation never charges: the agent prepares, the human pays. Pass the quote_id from getParcelQuote and the session reuses that quote instead of spending a second carrier call. Create-or-update: send your own external_id (an order or cart id) and the call creates the session if it does not exist for that external_id, or re-prices it in place if it does (same session_id; new amount, service and handoff_url). created in the answer says which branch ran. A session whose checkout the human has already started is not changed: that call answers 409 session_in_checkout with its session_id. Without external_id every call creates a new session. external_id needs a bearer token from /oauth/token and is scoped to that OAuth client, so another client sending the same id reaches a different session; without a token it answers 401 token_required. A session lives 30 days from its last create or update; after that the same external_id creates a new one.",
     "x-payment-info": {
      "intent": "session",
      "method": "stripe",
@@ -279,6 +279,17 @@
           "to_country": "US",
           "quantity": 1
          }
+        },
+        "upsertByExternalId": {
+         "summary": "Create or update by your own key (external_id)",
+         "value": {
+          "external_id": "cart-10442",
+          "product": "Yamaha FG800 acoustic guitar in a hard case",
+          "from_zip": "07102",
+          "to_zip": "30303",
+          "to_country": "US",
+          "quantity": 1
+         }
         }
        }
       }
@@ -286,7 +297,7 @@
     },
     "responses": {
      "200": {
-      "description": "The session: intent, method, amount, currency, service, handoff_url, session_id, note. Keep session_id for getCheckoutStatus.",
+      "description": "The session: intent, method, amount, currency, service, handoff_url, session_id, created, note. created is true when this call created the session and false when it updated the one stored under your external_id. Keep session_id for getCheckoutStatus.",
       "content": {
        "application/json": {
         "schema": {
@@ -295,6 +306,7 @@
         "example": {
          "intent": "session",
          "session_id": "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33",
+         "created": true,
          "method": [
           "stripe",
           "card"
@@ -311,7 +323,7 @@
       }
      },
      "400": {
-      "description": "invalid_json or invalid_request — the body is not the documented shape.",
+      "description": "invalid_json — the body is not JSON; invalid_request — external_id is not 1 to 100 letters, digits, dots, underscores, colons or hyphens.",
       "content": {
        "application/json": {
         "schema": {
@@ -319,13 +331,43 @@
         },
         "example": {
          "error": "invalid_request",
-         "message": "JSON object body required."
+         "message": "external_id must be 1 to 100 letters, digits, dots, underscores, colons or hyphens."
+        }
+       }
+      }
+     },
+     "401": {
+      "description": "token_required — external_id was sent without a bearer token; invalid_token — the bearer token is expired, revoked or unknown. The OAuth client is what scopes external_id, so the create-or-update needs a token from /oauth/token. Without external_id this operation does not read the token.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        },
+        "example": {
+         "error": "token_required",
+         "message": "external_id needs a bearer token from /oauth/token: the OAuth client is what scopes it. Leave external_id out to create a new session without one."
+        }
+       }
+      }
+     },
+     "409": {
+      "description": "session_in_checkout — the session stored under this external_id already has a checkout the human started, so it was not changed. Read it with getCheckoutStatus, or send a new external_id for a different shipment.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Problem"
+        },
+        "example": {
+         "error": "session_in_checkout",
+         "message": "The human has already started the checkout of the session stored under this external_id, so it was not changed. Read it with getCheckoutStatus, or send a new external_id for a different shipment.",
+         "session_id": "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33",
+         "external_id": "cart-10442"
         }
        }
       }
      },
      "422": {
-      "description": "session_failed — unpriceable, restricted, not a parcel, or more than one box.",
+      "description": "session_failed — required fields missing or invalid, unpriceable, restricted, not a parcel, or more than one box.",
       "content": {
        "application/json": {
         "schema": {
@@ -773,8 +815,14 @@
    },
    "CheckoutSessionRequest": {
     "type": "object",
-    "description": "The shipment to open a checkout for: a quote_id from a previous quote, or the shipment itself.",
+    "description": "The shipment to open a checkout for: a quote_id from a previous quote, or the shipment itself. Optionally your own external_id, which makes the call a create-or-update.",
     "properties": {
+     "external_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,100}$",
+      "description": "Your own key for this session, such as an order or cart id. With it the call is a create-or-update: it creates the session if none exists for this external_id, and re-prices that session in place if one does. Needs a bearer token from /oauth/token, because the OAuth client is what scopes the key: without one the call answers 401 token_required. Without external_id every call creates a new session, token or not.",
+      "example": "cart-10442"
+     },
      "quote_id": {
       "type": "string",
       "description": "The quote_id a getParcelQuote answer carries (the get_parcel_quote tool returns the same handle), valid 15 minutes. When given, the shipment comes from that quote and product, from_zip, to_zip, to_country and quantity are ignored; an expired handle prices the fields live."
@@ -842,6 +890,14 @@
       ],
       "pattern": "^as_[A-Za-z0-9-]{8,80}$",
       "description": "Handle for getCheckoutStatus, shaped as_ plus a UUID, good for 30 days. Null only when the session record could not be stored."
+     },
+     "created": {
+      "type": "boolean",
+      "description": "Which branch ran: true when this call created the session, false when it updated the session already stored under your external_id. Always true without external_id. Absent only when session_id is null, because then nothing was stored."
+     },
+     "external_id": {
+      "type": "string",
+      "description": "The external_id you sent, echoed back; absent when you sent none."
      },
      "method": {
       "type": "array",
@@ -1062,7 +1118,7 @@
     "properties": {
      "error": {
       "type": "string",
-      "description": "Stable code: invalid_json, invalid_request, missing_required_fields, product_not_recognized, product_url_not_detected, session_failed, session_not_found, rate_limited, invalid_token"
+      "description": "Stable code: invalid_json, invalid_request, missing_required_fields, product_not_recognized, product_url_not_detected, session_failed, session_in_checkout, session_not_found, rate_limited, invalid_token, token_required"
      },
      "message": {
       "type": "string",
@@ -1074,6 +1130,14 @@
        "type": "string"
       },
       "description": "Field names still needed, with missing_required_fields and product_not_recognized"
+     },
+     "session_id": {
+      "type": "string",
+      "description": "With session_in_checkout: the session stored under your external_id, whose checkout the human has started"
+     },
+     "external_id": {
+      "type": "string",
+      "description": "With session_in_checkout: the external_id you sent"
      }
     }
    }
@@ -1081,7 +1145,7 @@
   "securitySchemes": {
    "clientCredentials": {
     "type": "oauth2",
-    "description": "Optional. Every operation works without a token. A client that wants its own hourly rate-limit bucket holds OAuth 2.0 client_credentials issued by hand (registration instructions at https://smklog.com/auth.md) and sends the opaque bearer it gets from /oauth/token. Discovery: /.well-known/oauth-authorization-server.",
+    "description": "Optional. Every operation works without a token. A client that wants its own hourly rate-limit bucket, or the external_id create-or-update on createPaymentSession, holds OAuth 2.0 client_credentials issued by hand (registration instructions at https://smklog.com/auth.md) and sends the opaque bearer it gets from /oauth/token. Discovery: /.well-known/oauth-authorization-server.",
     "flows": {
      "clientCredentials": {
       "tokenUrl": "https://quote-api.smklog.com/oauth/token",

@@ -26,6 +26,14 @@
       "pattern": "^as_[A-Za-z0-9-]{8,80}$",
       "description": "Handle for getCheckoutStatus, shaped as_ plus a UUID, good for 30 days. Null only when the session record could not be stored."
     },
+    "created": {
+      "type": "boolean",
+      "description": "Which branch ran: true when this call created the session, false when it updated the session already stored under your external_id. Always true without external_id. Absent only when session_id is null, because then nothing was stored."
+    },
+    "external_id": {
+      "type": "string",
+      "description": "The external_id you sent, echoed back; absent when you sent none."
+    },
     "method": {
       "type": "array",
       "items": {

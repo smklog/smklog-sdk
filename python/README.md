@@ -50,13 +50,21 @@ shipment, cache on your side, never poll. `create_payment_session` takes one of 
 A `quote_id` older than 15 minutes makes the API price the shipment fields live, so send
 them along when the quote may have aged. The client never turns one form into the other.
 
+Either form may also carry `external_id=...`, your own key for the session (an order or cart
+id), when the client holds a `token`. The call is then a create-or-update: it creates the
+session if none exists for that id and re-prices it in place (same `session_id`) if one does,
+and `session.created` says which branch ran. A session whose checkout the human has already
+started is left alone: the API answers 409 `session_in_checkout`, a `SmklogError` whose
+`body["session_id"]` names it. Without a token, `external_id` is refused with 401
+`token_required`.
+
 ## Client options
 
 | Option | Default | Meaning |
 | --- | --- | --- |
 | `base_url` | `https://quote-api.smklog.com` | The API host. |
 | `timeout` | `30.0` | Seconds per request; a quote can take 10-20 s while carriers answer. |
-| `token` | `None` | Optional OAuth bearer for a dedicated rate-limit bucket ([auth.md](https://smklog.com/auth.md)); sent as `Authorization: Bearer ...` only when set. |
+| `token` | `None` | Optional OAuth bearer ([auth.md](https://smklog.com/auth.md)): a dedicated rate-limit bucket for quotes, and required for `external_id`; sent as `Authorization: Bearer ...` only when set. |
 | `user_agent` | `None` | Suffix appended after `smklog-sdk-python/0.1.0`. |
 
 Operations: `get_parcel_quote(...)` -> `QuoteResponse` (with `quote_id`, `rates`,

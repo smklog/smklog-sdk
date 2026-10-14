@@ -79,13 +79,20 @@ alongside an old id when you have them. `quote.quote_id` is `null` when nothing 
 handle could not be stored, and absent on answers without rates; the client passes a `quote_id`
 through as given and never invents one.
 
+Either form may also carry `external_id`, your own key for the session (an order or cart id),
+when the client holds a `token`. The call is then a create-or-update: it creates the session if
+none exists for that id and re-prices it in place (same `session_id`) if one does, and `created`
+in the answer says which branch ran. A session whose checkout the human has already started is
+left alone: the API answers 409 `session_in_checkout`, a `SmklogError` whose `body.session_id`
+names it. Without a token, `external_id` is refused with 401 `token_required`.
+
 ## Options
 
 ```js
 new SmklogClient({
   baseUrl: 'https://quote-api.smklog.com', // default
   timeout: 30_000,                         // ms per attempt; a quote can take 10-20 s
-  token: undefined,                        // OAuth bearer for a dedicated rate-limit bucket
+  token: undefined,                        // OAuth bearer: a dedicated bucket for quotes; needed for external_id
   userAgent: 'my-app/2.0',                 // appended after smklog-sdk-javascript/0.1.0
 });
 ```

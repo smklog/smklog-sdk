@@ -21,6 +21,18 @@
         "to_country": "US",
         "quantity": 1
       }
+    },
+    {
+      "name": "upsertByExternalId",
+      "summary": "Create or update by your own key (external_id)",
+      "value": {
+        "external_id": "cart-10442",
+        "product": "Yamaha FG800 acoustic guitar in a hard case",
+        "from_zip": "07102",
+        "to_zip": "30303",
+        "to_country": "US",
+        "quantity": 1
+      }
     }
   ]
 }

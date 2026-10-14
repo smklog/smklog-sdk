@@ -184,6 +184,9 @@ class CheckoutSessionRequest(Model):
     to_zip: Optional[str] = None
     to_country: Optional[str] = None
     quantity: Optional[int] = None
+    # Your own key: the call creates the session if none exists for it and re-prices
+    # it in place if one does. Needs a client token (401 token_required without one).
+    external_id: Optional[str] = None
 
 
 @dataclass
@@ -192,6 +195,9 @@ class CheckoutSession(Model):
 
     intent: Optional[str] = None
     session_id: Optional[str] = None
+    # Which branch ran: True when this call created the session, False when it
+    # updated the one stored under your external_id; None only without a session_id.
+    created: Optional[bool] = None
     method: Optional[List[str]] = None
     amount: Optional[float] = None
     currency: Optional[str] = None
@@ -200,6 +206,7 @@ class CheckoutSession(Model):
     identified_product_title: Optional[str] = None
     quote_reused: Optional[bool] = None
     note: Optional[str] = None
+    external_id: Optional[str] = None
 
 
 @dataclass
@@ -255,3 +262,6 @@ class Problem(Model):
     error: Optional[str] = None
     message: Optional[str] = None
     missing: List[str] = field(default_factory=list)
+    # With session_in_checkout: the session your external_id names, and the id you sent.
+    session_id: Optional[str] = None
+    external_id: Optional[str] = None

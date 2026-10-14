@@ -3,8 +3,14 @@
   "$id": "https://smklog.com/developers/schemas/checkout-session-request.schema.json",
   "title": "CheckoutSessionRequest",
   "type": "object",
-  "description": "The shipment to open a checkout for: a quote_id from a previous quote, or the shipment itself.",
+  "description": "The shipment to open a checkout for: a quote_id from a previous quote, or the shipment itself. Optionally your own external_id, which makes the call a create-or-update.",
   "properties": {
+    "external_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._:-]{1,100}$",
+      "description": "Your own key for this session, such as an order or cart id. With it the call is a create-or-update: it creates the session if none exists for this external_id, and re-prices that session in place if one does. Needs a bearer token from /oauth/token, because the OAuth client is what scopes the key: without one the call answers 401 token_required. Without external_id every call creates a new session, token or not.",
+      "example": "cart-10442"
+    },
     "quote_id": {
       "type": "string",
       "description": "The quote_id a getParcelQuote answer carries (the get_parcel_quote tool returns the same handle), valid 15 minutes. When given, the shipment comes from that quote and product, from_zip, to_zip, to_country and quantity are ignored; an expired handle prices the fields live."

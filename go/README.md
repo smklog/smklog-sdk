@@ -100,13 +100,20 @@ not turn one into the other:
 amount, cheapest when omitted or unmatched. A `QuoteID` older than 15 minutes makes the API
 price the shipment fields live instead, so send them alongside an old handle when you have them.
 
+Either form may also carry `ExternalID`, your own key for the session (an order or cart id),
+when the client holds a token. The call is then a create-or-update: it creates the session if
+none exists for that id and re-prices it in place (same `SessionID`) if one does, and `Created`
+(`*bool`) says which branch ran. A session whose checkout the human has already started is left
+alone: the API answers 409 `session_in_checkout`, an `*APIError` whose `Body` names the session.
+Without a token, `ExternalID` is refused with 401 `token_required`.
+
 ## Options
 
 ```go
 smklog.New(
 	smklog.WithBaseURL("https://quote-api.smklog.com"), // default
 	smklog.WithTimeout(30*time.Second),                 // per attempt; a quote can take 10-20 s; 0 turns it off
-	smklog.WithToken("..."),                            // OAuth bearer for a dedicated rate-limit bucket
+	smklog.WithToken("..."),                            // OAuth bearer: a dedicated bucket for quotes; needed for ExternalID
 	smklog.WithUserAgent("my-app/2.0"),                 // appended after smklog-sdk-go/0.1.0
 	smklog.WithHTTPClient(&http.Client{}),              // your own transport (proxy, TLS)
 )

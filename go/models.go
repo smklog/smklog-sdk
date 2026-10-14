@@ -154,6 +154,11 @@ type CheckoutSessionRequest struct {
 	ToZip     string `json:"to_zip,omitempty"`
 	ToCountry string `json:"to_country,omitempty"`
 	Quantity  int    `json:"quantity,omitempty"`
+	// ExternalID is your own key for the session (an order or cart id): the
+	// call creates the session if none exists for it and re-prices it in place
+	// if one does. It needs a client token; without one the API answers 401
+	// token_required.
+	ExternalID string `json:"external_id,omitempty"`
 }
 
 // CheckoutSession is a payment session, not a charge (checkout-session.schema.json):
@@ -161,8 +166,12 @@ type CheckoutSessionRequest struct {
 // nil only when the session record could not be stored; there is then nothing
 // to poll, and the human still pays on HandoffURL.
 type CheckoutSession struct {
-	Intent                 string                     `json:"intent"`
-	SessionID              *string                    `json:"session_id"`
+	Intent    string  `json:"intent"`
+	SessionID *string `json:"session_id"`
+	// Created says which branch ran: true when this call created the session,
+	// false when it updated the one stored under your ExternalID. Nil only when
+	// SessionID is nil.
+	Created                *bool                      `json:"created,omitempty"`
 	Method                 []string                   `json:"method,omitempty"`
 	Amount                 float64                    `json:"amount"`
 	Currency               string                     `json:"currency"`
@@ -171,6 +180,7 @@ type CheckoutSession struct {
 	IdentifiedProductTitle string                     `json:"identified_product_title,omitempty"`
 	QuoteReused            bool                       `json:"quote_reused"`
 	Note                   string                     `json:"note,omitempty"`
+	ExternalID             string                     `json:"external_id,omitempty"`
 	Extra                  map[string]json.RawMessage `json:"-"`
 }
 
@@ -220,10 +230,14 @@ type Liveness struct {
 
 // Problem is every error body on the host (problem.schema.json).
 type Problem struct {
-	Error   string                     `json:"error"`
-	Message string                     `json:"message,omitempty"`
-	Missing []string                   `json:"missing,omitempty"`
-	Extra   map[string]json.RawMessage `json:"-"`
+	Error   string   `json:"error"`
+	Message string   `json:"message,omitempty"`
+	Missing []string `json:"missing,omitempty"`
+	// With session_in_checkout: the session your external_id names, and the id
+	// you sent.
+	SessionID  string                     `json:"session_id,omitempty"`
+	ExternalID string                     `json:"external_id,omitempty"`
+	Extra      map[string]json.RawMessage `json:"-"`
 }
 
 // The `type plain X` alias in each method drops X's own methods, so the

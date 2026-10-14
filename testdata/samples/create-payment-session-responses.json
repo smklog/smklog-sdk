@@ -9,6 +9,7 @@
         "value": {
           "intent": "session",
           "session_id": "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33",
+          "created": true,
           "method": [
             "stripe",
             "card"
@@ -28,7 +29,27 @@
         "name": "default",
         "value": {
           "error": "invalid_request",
-          "message": "JSON object body required."
+          "message": "external_id must be 1 to 100 letters, digits, dots, underscores, colons or hyphens."
+        }
+      }
+    ],
+    "401": [
+      {
+        "name": "default",
+        "value": {
+          "error": "token_required",
+          "message": "external_id needs a bearer token from /oauth/token: the OAuth client is what scopes it. Leave external_id out to create a new session without one."
+        }
+      }
+    ],
+    "409": [
+      {
+        "name": "default",
+        "value": {
+          "error": "session_in_checkout",
+          "message": "The human has already started the checkout of the session stored under this external_id, so it was not changed. Read it with getCheckoutStatus, or send a new external_id for a different shipment.",
+          "session_id": "as_3f9c1b2e-7d64-4a8e-9c0f-5b2d1e8a7c33",
+          "external_id": "cart-10442"
         }
       }
     ],

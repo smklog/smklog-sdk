@@ -59,8 +59,11 @@ class ContractTests(unittest.TestCase):
             "invalid_json": smklog.InvalidRequestError,
             "session_not_found": smklog.NotFoundError,
             "session_failed": smklog.SessionFailedError,
-            # invalid_token has no specialization of its own: it is the base error.
+            # These have no specialization of their own: they are the base error, and
+            # the caller reads .error (and, for session_in_checkout, body["session_id"]).
             "invalid_token": smklog.SmklogError,
+            "token_required": smklog.SmklogError,
+            "session_in_checkout": smklog.SmklogError,
         }
         description = self.document["components"]["schemas"]["Problem"]["properties"]["error"]["description"]
         documented = set(re.findall(r"[a-z]+(?:_[a-z]+)+", description))

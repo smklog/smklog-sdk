@@ -10,7 +10,7 @@
   "properties": {
     "error": {
       "type": "string",
-      "description": "Stable code: invalid_json, invalid_request, missing_required_fields, product_not_recognized, product_url_not_detected, session_failed, session_not_found, rate_limited, invalid_token"
+      "description": "Stable code: invalid_json, invalid_request, missing_required_fields, product_not_recognized, product_url_not_detected, session_failed, session_in_checkout, session_not_found, rate_limited, invalid_token, token_required"
     },
     "message": {
       "type": "string",
@@ -22,6 +22,14 @@
         "type": "string"
       },
       "description": "Field names still needed, with missing_required_fields and product_not_recognized"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "With session_in_checkout: the session stored under your external_id, whose checkout the human has started"
+    },
+    "external_id": {
+      "type": "string",
+      "description": "With session_in_checkout: the external_id you sent"
     }
   },
   "x-provenance": {
